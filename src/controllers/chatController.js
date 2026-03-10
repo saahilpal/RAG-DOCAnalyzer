@@ -46,11 +46,89 @@ async function postChat(req, res) {
     const readiness = getPdfReadinessBySession(sessionId, req.user.id);
 
     if (readiness.uploaded === 0) {
+        const guidanceMessage = "Please upload a document first so I can analyze it.\nSupported formats: PDF, DOCX, CSV, MD, TXT.";
+
+        if (shouldStreamChat(req)) {
+            initSse(res);
+            let clientDisconnected = false;
+            const MAX_STREAM_MS = 120000;
+            let doneEmitted = false;
+            let heartbeatInterval = null;
+
+            req.on('aborted', () => { clientDisconnected = true; });
+            res.on('close', () => {
+                clientDisconnected = true;
+                if (heartbeatInterval) clearInterval(heartbeatInterval);
+                if (timeout) clearTimeout(timeout);
+            });
+
+            const emitDone = (payload) => {
+                if (doneEmitted) return;
+                doneEmitted = true;
+                writeSseEvent(res, 'done', payload);
+            };
+
+            const timeout = setTimeout(() => {
+                writeSseEvent(res, 'error', {
+                    ok: false,
+                    error: { message: "Stream timeout" }
+                });
+                emitDone({
+                    ok: true,
+                    data: {
+                        answer: "Response timed out.",
+                        fallback: true
+                    }
+                });
+                if (!res.writableEnded) res.end();
+            }, MAX_STREAM_MS);
+
+            heartbeatInterval = setInterval(() => {
+                if (!clientDisconnected && !res.writableEnded) {
+                    writeSseEvent(res, 'ping', {});
+                }
+            }, 15000);
+
+            if (!clientDisconnected) {
+                writeSseEvent(res, 'ready', {
+                    ok: true,
+                    data: { sessionId, status: 'streaming' }
+                });
+            }
+
+            if (!clientDisconnected) {
+                writeSseEvent(res, 'token', {
+                    ok: true,
+                    data: { token: guidanceMessage }
+                });
+            }
+
+            if (!clientDisconnected) {
+                emitDone({
+                    ok: true,
+                    data: {
+                        answer: guidanceMessage,
+                        formattedAnswer: guidanceMessage,
+                        message: guidanceMessage,
+                        sessionTitle: session.title,
+                    }
+                });
+            }
+
+            if (heartbeatInterval) clearInterval(heartbeatInterval);
+            if (timeout) clearTimeout(timeout);
+
+            if (!res.writableEnded) {
+                return res.end();
+            }
+            return;
+        }
+
         return res.json({
             ok: true,
             data: {
-                answer: "Please upload a document first so I can analyze it.\nSupported formats: PDF, DOCX, CSV, MD, TXT.",
-                message: "Please upload a document first so I can analyze it.\nSupported formats: PDF, DOCX, CSV, MD, TXT."
+                answer: guidanceMessage,
+                message: guidanceMessage
             }
         });
     }
@@ -89,14 +167,43 @@ async function postChat(req, res) {
     if (shouldStreamChat(req)) {
         initSse(res);
         let clientDisconnected = false;
-        req.on('aborted', () => {
-            clientDisconnected = true;
-        });
+        const MAX_STREAM_MS = 120000;
+        let doneEmitted = false;
+        let heartbeatInterval = null;
+
+        req.on('aborted', () => { clientDisconnected = true; });
         res.on('close', () => {
-            if (!res.writableEnded) {
-                clientDisconnected = true;
-            }
+            clientDisconnected = true;
+            if (heartbeatInterval) clearInterval(heartbeatInterval);
+            if (timeout) clearTimeout(timeout);
         });
+
+        const emitDone = (payload) => {
+            if (doneEmitted) return;
+            doneEmitted = true;
+            writeSseEvent(res, 'done', payload);
+        };
+
+        const timeout = setTimeout(() => {
+            writeSseEvent(res, 'error', {
+                ok: false,
+                error: { message: "Stream timeout" }
+            });
+            emitDone({
+                ok: true,
+                data: {
+                    answer: "Response timed out.",
+                    fallback: true
+                }
+            });
+            if (!res.writableEnded) res.end();
+        }, MAX_STREAM_MS);
+
+        heartbeatInterval = setInterval(() => {
+            if (!clientDisconnected && !res.writableEnded) {
+                writeSseEvent(res, 'ping', {});
+            }
+        }, 15000);
 
         const emitEvent = (event, payload) => {
             if (clientDisconnected || res.writableEnded) {
@@ -186,7 +293,7 @@ async function postChat(req, res) {
                 });
             }
 
-            emitEvent('done', {
+            emitDone({
                 ok: true,
                 data: {
                     answer: response.answer,
@@ -205,7 +312,24 @@ async function postChat(req, res) {
                 ok: false,
                 error: normalized.error,
             });
+            // Guarantee done event even on error
+            emitDone({
+                ok: true,
+                data: {
+                    answer: 'Internal error generated during streaming.',
+                    formattedAnswer: 'Internal error generated during streaming.',
+                    responseSchema: null,
+                    responseStyle,
+                    sources: [],
+                    usedChunksCount: 0,
+                    sessionTitle: session.title,
+                    fallback: true,
+                },
+            });
         } finally {
+            if (heartbeatInterval) clearInterval(heartbeatInterval);
+            if (timeout) clearTimeout(timeout);
+
             if (!res.writableEnded) {
                 res.end();
             }

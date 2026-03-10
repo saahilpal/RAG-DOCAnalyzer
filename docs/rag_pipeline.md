@@ -41,9 +41,13 @@
 ## Streaming
 
 For SSE chat:
+- Connection includes `retry: 3000` directive for automatic reconnects.
 - emits `ready`
+- emits periodic `ping` (heartbeat every 15s to keep connection alive)
 - emits periodic `progress`
 - emits incremental `token`
 - emits final `done` (contains standard answer schema and `sessionTitle`) or `error`
+
+> **Note**: A strict 120-second timeout exists on all streams. If generated content takes longer, the backend forcefully emits an `error` followed by a `done` event with a timed-out fallback message.
 
 > **Note**: For both streaming and synchronous modes, the `sessionTitle` is only generated after the 2nd user message in a new chat. It may be refined automatically from the 6th message onward.

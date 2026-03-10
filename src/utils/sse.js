@@ -7,6 +7,7 @@ function initSse(res) {
     if (typeof res.flushHeaders === 'function') {
         res.flushHeaders();
     }
+    res.write('retry: 3000\n\n');
 }
 
 function writeSseEvent(res, event, payload) {
