@@ -112,6 +112,20 @@ export function signUp(email: string, password: string) {
   });
 }
 
+export function forgotPassword(email: string) {
+  return request<{ message: string }>('/api/auth/forgot-password', {
+    method: 'POST',
+    body: JSON.stringify({ email }),
+  });
+}
+
+export function resetPassword(payload: { email: string; otp: string; newPassword: string }) {
+  return request<{ message: string }>('/api/auth/reset-password', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
 export function signOut() {
   return request<{ loggedOut: boolean }>('/api/auth/logout', {
     method: 'POST',

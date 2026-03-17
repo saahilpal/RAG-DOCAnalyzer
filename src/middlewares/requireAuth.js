@@ -23,7 +23,7 @@ function requireAuth(req, res, next) {
       throw unauthorized('Authentication required.');
     }
 
-    const payload = jwt.verify(token, env.jwtSecret);
+    const payload = jwt.verify(token, env.jwtSecret, { algorithms: ['HS256'] });
     req.auth = {
       userId: payload.sub,
       email: payload.email,

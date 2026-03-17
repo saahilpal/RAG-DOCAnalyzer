@@ -11,6 +11,7 @@ const { streamRagAnswer } = require('../services/ragService');
 const env = require('../config/env');
 const {
   consumeUserChatQuota,
+  refundUserChatQuota,
   getRemainingChatRequests,
   getTodayChatUsage,
 } = require('../services/quotaService');
@@ -20,6 +21,7 @@ async function stream(req, res, next) {
   const { sessionId, documentId, query } = req.body;
 
   let streamStarted = false;
+  let quotaConsumed = false;
   let clientDisconnected = false;
 
   req.on('close', () => {
@@ -37,6 +39,7 @@ async function stream(req, res, next) {
     });
 
     const quota = await consumeUserChatQuota(userId);
+    quotaConsumed = true;
 
     await saveMessage({
       sessionId: session.id,
@@ -87,6 +90,17 @@ async function stream(req, res, next) {
       endSse(res);
     }
   } catch (error) {
+    if (quotaConsumed && !clientDisconnected) {
+      try {
+        await refundUserChatQuota(userId);
+      } catch (refundError) {
+        logger.error('Failed to refund quota after error', {
+          userId,
+          message: refundError.message,
+        });
+      }
+    }
+
     if (error?.code === 'CLIENT_DISCONNECTED') {
       if (!clientDisconnected && !res.writableEnded) {
         endSse(res);

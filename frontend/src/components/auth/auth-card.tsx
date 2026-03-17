@@ -101,9 +101,19 @@ export function AuthCard({ mode }: AuthCardProps) {
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-sm font-medium text-neutral-700" htmlFor="password">
-              Password
-            </label>
+            <div className="flex items-center justify-between">
+              <label className="text-sm font-medium text-neutral-700" htmlFor="password">
+                Password
+              </label>
+              {mode === 'login' && (
+                <Link
+                  href="/forgot-password"
+                  className="text-xs font-medium text-neutral-600 transition hover:text-neutral-900"
+                >
+                  Forgot password?
+                </Link>
+              )}
+            </div>
 
             <div className="relative">
               <Input

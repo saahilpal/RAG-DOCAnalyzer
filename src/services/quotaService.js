@@ -99,9 +99,21 @@ async function consumeUserChatQuota(userId) {
   });
 }
 
+async function refundUserChatQuota(userId) {
+  await db.query(
+    `UPDATE daily_chat_usage
+     SET request_count = GREATEST(0, request_count - 1),
+         updated_at = NOW()
+     WHERE user_id = $1
+       AND usage_date = CURRENT_DATE`,
+    [userId],
+  );
+}
+
 module.exports = {
   getTodayChatUsage,
   consumeUserChatQuota,
+  refundUserChatQuota,
   getRemainingChatRequests,
   assertUserChatQuota,
 };

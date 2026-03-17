@@ -48,18 +48,7 @@ async function retrieveFtsChunks({ userId, documentId, query }) {
     return normalizeChunks(result.rows).slice(0, env.ragTopK);
   }
 
-  const fallback = await db.query(
-    `SELECT c.content, c.chunk_index
-     FROM chunks c
-     JOIN documents d ON d.id = c.document_id
-     WHERE d.user_id = $1
-       AND c.document_id = $2
-     ORDER BY c.chunk_index ASC
-     LIMIT $3`,
-    [userId, documentId, env.ragTopK],
-  );
-
-  return normalizeChunks(fallback.rows);
+  return [];
 }
 
 async function retrieveVectorChunks({ userId, documentId, query }) {

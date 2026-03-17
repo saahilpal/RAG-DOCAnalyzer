@@ -329,21 +329,24 @@ async function uploadAndIndexDocument({ userId, file, source = 'user', bypassDoc
 
       const document = docResult.rows[0];
 
-      for (const chunk of chunkRecords) {
-        if (chunk.embedding) {
-          const vectorLiteral = toVectorLiteral(chunk.embedding, env.embeddingDimension);
-          await client.query(
-            `INSERT INTO chunks (document_id, content, chunk_index, embedding)
-             VALUES ($1, $2, $3, $4::vector)`,
-            [document.id, chunk.content, chunk.chunkIndex, vectorLiteral],
-          );
-        } else {
-          await client.query(
-            `INSERT INTO chunks (document_id, content, chunk_index, embedding)
-             VALUES ($1, $2, $3, NULL)`,
-            [document.id, chunk.content, chunk.chunkIndex],
-          );
-        }
+      if (chunkRecords.length > 0) {
+        const values = [];
+        const placeholders = [];
+        chunkRecords.forEach((chunk, index) => {
+          const offset = index * 4;
+          const vectorLiteral = chunk.embedding
+            ? toVectorLiteral(chunk.embedding, env.embeddingDimension)
+            : null;
+
+          placeholders.push(`($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4}::vector)`);
+          values.push(document.id, chunk.content, chunk.chunkIndex, vectorLiteral);
+        });
+
+        await client.query(
+          `INSERT INTO chunks (document_id, content, chunk_index, embedding)
+           VALUES ${placeholders.join(', ')}`,
+          values,
+        );
       }
 
       return document;

@@ -1,14 +1,15 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-process.env.NODE_ENV = process.env.NODE_ENV || 'test';
-process.env.DATABASE_URL = process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/postgres';
-process.env.SUPABASE_URL = process.env.SUPABASE_URL || 'https://example.supabase.co';
-process.env.SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || 'service_key';
-process.env.GEMINI_API_KEY = process.env.GEMINI_API_KEY || 'demo_key';
-process.env.JWT_SECRET = process.env.JWT_SECRET || '12345678901234567890123456789012';
-process.env.CORS_ORIGIN = process.env.CORS_ORIGIN || 'http://localhost:3000';
-process.env.MAX_UPLOAD_FILE_SIZE_BYTES = process.env.MAX_UPLOAD_FILE_SIZE_BYTES || '100';
+// Override env vars before requiring any modules
+process.env.NODE_ENV = 'test';
+process.env.DATABASE_URL = 'postgresql://postgres:postgres@localhost:5432/postgres';
+process.env.SUPABASE_URL = 'https://example.supabase.co';
+process.env.SUPABASE_SERVICE_KEY = 'service_key';
+process.env.GEMINI_API_KEY = 'demo_key';
+process.env.JWT_SECRET = '12345678901234567890123456789012';
+process.env.CORS_ORIGIN = 'http://localhost:3000';
+process.env.MAX_UPLOAD_FILE_SIZE_BYTES = '100';
 
 const { registerSchema, loginSchema } = require('../src/validations/authSchemas');
 const { streamChatSchema } = require('../src/validations/chatSchemas');

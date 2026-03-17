@@ -13,7 +13,19 @@ const loginSchema = z.object({
   password: passwordSchema,
 });
 
+const forgotPasswordSchema = z.object({
+  email: emailSchema,
+});
+
+const resetPasswordSchema = z.object({
+  email: emailSchema,
+  otp: z.string().length(6),
+  newPassword: passwordSchema,
+});
+
 module.exports = {
   registerSchema,
   loginSchema,
+  forgotPasswordSchema,
+  resetPasswordSchema,
 };

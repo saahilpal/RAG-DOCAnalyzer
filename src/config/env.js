@@ -60,6 +60,12 @@ const envSchema = z.object({
     .string()
     .optional()
     .transform((value) => (value == null ? true : value.toLowerCase() === 'true')),
+
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.coerce.number().int().positive().optional(),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASS: z.string().optional(),
+  SMTP_FROM: z.string().optional().default('"DocAnalyzer" <noreply@example.com>'),
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -143,4 +149,12 @@ module.exports = {
 
   sampleDocPath: env.SAMPLE_DOC_PATH,
   enableSampleDocSeed: env.ENABLE_SAMPLE_DOC_SEED,
+
+  smtp: {
+    host: env.SMTP_HOST,
+    port: env.SMTP_PORT,
+    user: env.SMTP_USER,
+    pass: env.SMTP_PASS,
+    from: env.SMTP_FROM,
+  },
 };

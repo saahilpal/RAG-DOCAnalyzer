@@ -1,6 +1,15 @@
 const env = require('../config/env');
 const { ok } = require('../utils/apiResponse');
-const { registerUser, loginUser, signAuthToken, getUserById } = require('../services/authService');
+const {
+  registerUser,
+  loginUser,
+  signAuthToken,
+  getUserById,
+  getUserByEmail,
+  createOtp,
+  resetPassword,
+} = require('../services/authService');
+const { sendOtpEmail } = require('../services/mailService');
 const { ensureSampleDocumentForUserLazy } = require('../services/demoService');
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
@@ -51,9 +60,28 @@ async function me(req, res) {
   return ok(res, { user });
 }
 
+async function forgotPassword(req, res) {
+  const { email } = req.body;
+  const user = await getUserByEmail(email);
+
+  if (user) {
+    const otp = await createOtp(user.id, 'password_reset');
+    await sendOtpEmail(user.email, otp);
+  }
+
+  return ok(res, { message: 'If an account exists, a reset code was sent.' });
+}
+
+async function resetPasswordHandler(req, res) {
+  await resetPassword(req.body);
+  return ok(res, { message: 'Password has been reset successfully.' });
+}
+
 module.exports = {
   register,
   login,
   logout,
   me,
+  forgotPassword,
+  resetPassword: resetPasswordHandler,
 };

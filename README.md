@@ -104,18 +104,27 @@ Compatibility notes:
 - AI: Gemini (`gemini-1.5-flash`, optional `text-embedding-004`)
 - Auth: JWT + HTTP-only cookie + bcrypt
 
+## Recent Optimizations & Enhancements
+
+- **High-Performance Indexing**: PDF chunk insertion now uses **multi-row batch processing**, significantly reducing database round-trips and speeding up the indexing of large documents.
+- **Password Recovery**: Integrated `nodemailer` to support secure password reset flows via **SMTP and 6-digit OTP codes**.
+- **Enhanced Security**: 
+  - JWT verification now explicitly enforces the `HS256` algorithm to prevent algorithm-switching attacks.
+  - Added **Quota Refund Logic**: Daily chat usage is automatically refunded if a streaming request fails before the AI starts generating, ensuring fair usage for users.
+- **Improved Retrieval**: Refined the Full-Text Search (FTS) retrieval path for more precise context extraction.
+
 ## Monorepo Structure
 
 ```text
 .
-├── src/                       # Backend source
-├── database/schema.sql        # Supabase schema
-├── sample_docs/               # Preloaded sample PDF
-├── frontend/                  # Next.js frontend app
-├── docs/architecture.svg      # Full system architecture
-├── docs/rag-architecture.svg  # RAG pipeline architecture
-├── render.yaml                # Render deployment blueprint
-└── DEPLOYMENT_CHECKLIST.md    # Deployment guide
+├── src/                       # Backend source (Express, RAG logic, Services)
+├── database/schema.sql        # Unified Supabase Postgres schema
+├── sample_docs/               # Preloaded sample PDF for demo seeding
+├── frontend/                  # Next.js frontend (App Router, Framer Motion)
+├── docs/architecture.svg      # System-wide architectural diagram
+├── docs/rag-architecture.svg  # Detailed RAG pipeline visualization
+├── render.yaml                # Render blueprint for backend deployment
+└── DEPLOYMENT_CHECKLIST.md    # Production deployment and config guide
 ```
 
 ## API Endpoints
