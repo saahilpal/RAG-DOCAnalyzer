@@ -1,74 +1,100 @@
-# Deployment Checklist (Render + Vercel + Supabase)
+# Comprehensive Deployment Guide (Supabase + Render + Vercel)
 
-Use this checklist to deploy a production-style demo safely.
+Follow these exact steps to deploy a production-ready instance of **RAG-DOCAnalyzer**.
 
-Repository:
-- https://github.com/saahilpal/RAG-DOCAnalyzer
+---
 
-Architecture references:
-- Full project: [`docs/architecture.svg`](./docs/architecture.svg)
-- RAG core: [`docs/rag-architecture.svg`](./docs/rag-architecture.svg)
+## Prerequisites
 
-## 1) Supabase
+1.  **GitHub Repository**: Ensure your code is pushed to your GitHub account.
+2.  **Supabase Account**: For Postgres Database and PDF Storage.
+3.  **Google AI Studio API Key**: For Gemini generation and embeddings.
+4.  **Render Account**: To host the Node.js Express Backend.
+5.  **Vercel Account**: To host the Next.js Frontend.
+6.  **SMTP Provider** (Optional but recommended): For Password Reset emails (e.g., Resend, SendGrid, Gmail).
 
-1. Create a new Supabase project.
-2. Run schema:
+---
 
-```bash
-npm run db:schema
-```
+## Step 1: Database & Storage (Supabase)
 
-3. Create storage bucket:
-- `documents` (public bucket)
+1.  **Create Project**: Log in to [Supabase](https://supabase.com/) and create a new project.
+2.  **Run SQL Schema**:
+    *   Navigate to the **SQL Editor** in your Supabase dashboard.
+    *   Open `database/schema.sql` from this repository.
+    *   Copy and paste the entire content into a new query and click **Run**.
+3.  **Enable Vector Extension**: (Included in schema.sql, but ensure it's active in **Database > Extensions**).
+4.  **Configure Storage**:
+    *   Go to **Storage > Buckets**.
+    *   Create a new bucket named `documents`.
+    *   Set the bucket to **Public** (required for easy retrieval via Public URLs).
+5.  **Gather Credentials**:
+    *   Go to **Project Settings > Database** to get your **Transaction Connection String** (`DATABASE_URL`).
+    *   Go to **Project Settings > API** to get your **Project URL** (`SUPABASE_URL`) and **service_role key** (`SUPABASE_SERVICE_KEY`).
 
-4. Copy credentials:
-- `DATABASE_URL`
-- `SUPABASE_URL`
-- `SUPABASE_SERVICE_KEY`
+---
 
-## 2) Backend (Render)
+## Step 2: Backend Deployment (Render)
 
-Deploy from repo root using:
-- [`render.yaml`](./render.yaml)
+1.  **Create Web Service**:
+    *   Log in to [Render](https://render.com/).
+    *   Click **New > Web Service**.
+    *   Connect your GitHub repository.
+2.  **Configure Environment**:
+    *   **Name**: `document-analyzer-backend`
+    *   **Runtime**: `Node`
+    *   **Build Command**: `npm install`
+    *   **Start Command**: `npm start`
+3.  **Set Environment Variables**: Click **Advanced > Add Environment Variable** and add:
+    *   `NODE_ENV`: `production`
+    *   `DATABASE_URL`: (Your Supabase connection string)
+    *   `SUPABASE_URL`: (Your Supabase Project URL)
+    *   `SUPABASE_SERVICE_KEY`: (Your Supabase service_role key)
+    *   `GEMINI_API_KEY`: (Your Google Gemini API Key)
+    *   `JWT_SECRET`: (A long, random string for auth security)
+    *   `CORS_ORIGIN`: (Initially `*` or your Vercel URL once deployed)
+    *   `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`: (Your email provider details for password reset)
+4.  **Wait for Deployment**: Render will build and deploy your backend. Note your service URL (e.g., `https://backend.onrender.com`).
 
-Set required secret env vars in Render:
-- `DATABASE_URL`
-- `SUPABASE_URL`
-- `SUPABASE_SERVICE_KEY`
-- `GEMINI_API_KEY`
-- `JWT_SECRET`
-- `CORS_ORIGIN` (your Vercel domain)
-- `GITHUB_REPOSITORY_URL`
-- `RUN_LOCALLY_GUIDE_URL`
+---
 
-Recommended RAG tuning env vars:
-- `RAG_TOP_K=5`
-- `RAG_CANDIDATE_PAGE_SIZE=400`
-- `RAG_HISTORY_LIMIT=50`
-- `RAG_TOKEN_TO_CHAR_RATIO=4`
-- `RAG_CHUNK_TOKENS=1000`
-- `RAG_CHUNK_OVERLAP_TOKENS=200`
+## Step 3: Frontend Deployment (Vercel)
 
-Health endpoint:
-- `/api/health/live`
+1.  **Create Project**:
+    *   Log in to [Vercel](https://vercel.com/).
+    *   Click **Add New > Project**.
+    *   Import your GitHub repository.
+2.  **Configure Project Settings**:
+    *   **Root Directory**: Set this to `frontend`.
+    *   **Framework Preset**: `Next.js`.
+3.  **Set Environment Variables**:
+    *   `NEXT_PUBLIC_API_URL`: (The URL of your **Render Backend** from Step 2).
+4.  **Deploy**: Click **Deploy**. Vercel will provide your frontend URL (e.g., `https://rag-docanalyzer.vercel.app`).
 
-## 3) Frontend (Vercel)
+---
 
-Project root in Vercel:
-- `frontend`
+## Step 4: Final Linkage (CORS)
 
-Config:
-- [`frontend/vercel.json`](./frontend/vercel.json)
+1.  **Update Backend CORS**:
+    *   Go back to **Render > Environment Variables**.
+    *   Update `CORS_ORIGIN` to your **Vercel Frontend URL** (e.g., `https://rag-docanalyzer.vercel.app`).
+    *   Render will automatically redeploy with the restricted CORS policy.
 
-Required env var:
-- `NEXT_PUBLIC_API_URL=https://<your-render-service>.onrender.com`
+---
 
-## 4) Post-Deploy Validation
+## Step 5: Post-Deployment Verification
 
-1. `GET /api/health/live` returns `ok: true`.
-2. `GET /api/limits` returns demo limits.
-3. Signup/Login works and sets HTTP-only cookie.
-4. Upload rejects invalid type/oversized file.
-5. Chat enforces daily quota and streams via SSE.
-6. If AI is down, fallback response still returns.
-7. Unknown origin POST requests are blocked.
+1.  **Health Check**: Visit `https://your-backend.onrender.com/api/health/live` (should see `{ "ok": true }`).
+2.  **Ready Check**: Visit `https://your-backend.onrender.com/api/health/ready` (should see `status: ready`).
+3.  **Sign Up**: Create an account on your deployed frontend.
+4.  **Upload**: Upload a PDF and wait for indexing.
+5.  **Chat**: Ask a question and ensure tokens stream back via SSE.
+6.  **Password Reset**: Test the "Forgot Password" flow if SMTP is configured.
+
+---
+
+## Troubleshooting
+
+*   **Database Errors**: Ensure you used the `service_role` key, not the `anon` key.
+*   **Upload Fails**: Check if the `documents` bucket exists and is public in Supabase Storage.
+*   **CORS Issues**: Double-check `CORS_ORIGIN` in Render matches your Vercel URL exactly (no trailing slash).
+*   **AI Timeouts**: If using Gemini's free tier, you may hit rate limits. The system will automatically use extractive fallback in these cases.
