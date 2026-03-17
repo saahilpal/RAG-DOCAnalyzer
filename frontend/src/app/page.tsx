@@ -65,7 +65,7 @@ const DEFAULT_LIMITS: DemoLimits = {
   cacheTtlSeconds: 600,
 };
 
-const DEFAULT_GITHUB = 'https://github.com/saahilpal/document-analyzer-rag-showcase';
+const DEFAULT_GITHUB = 'https://github.com/saahilpal/RAG-DOCAnalyzer';
 
 export default function LandingPage() {
   const [limits, setLimits] = useState<DemoLimits>(DEFAULT_LIMITS);

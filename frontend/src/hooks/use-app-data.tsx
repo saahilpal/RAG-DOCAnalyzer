@@ -51,7 +51,7 @@ type AppDataContextValue = {
 
 const AppDataContext = createContext<AppDataContextValue | null>(null);
 
-const DEFAULT_REPOSITORY_URL = 'https://github.com/saahilpal/document-analyzer-rag-showcase';
+const DEFAULT_REPOSITORY_URL = 'https://github.com/saahilpal/RAG-DOCAnalyzer';
 
 export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();

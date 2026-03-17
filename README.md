@@ -1,4 +1,4 @@
-# Document Analyzer RAG
+# RAG DOCAnalyzer
 
 Production-style **stateless RAG system** designed to run reliably on free-tier infrastructure.
 
@@ -20,7 +20,15 @@ For unlimited usage, run locally with your own API key and adjust limits.
 
 ## Architecture
 
+This repository contains the **entire project**: backend API, frontend app, database schema, deployment config, and docs.
+
+### Full Project Architecture
+
 ![Document Analyzer RAG Architecture](./docs/architecture.svg)
+
+### RAG Core Architecture
+
+![RAG Core Architecture](./docs/rag-architecture.svg)
 
 ## Tech Stack
 
@@ -41,6 +49,7 @@ For unlimited usage, run locally with your own API key and adjust limits.
 ├── sample_docs/             # Preloaded sample PDF
 ├── frontend/                # Next.js frontend app
 ├── docs/architecture.svg    # Architecture image
+├── docs/rag-architecture.svg # RAG pipeline image
 ├── render.yaml              # Render deployment blueprint
 └── DEPLOYMENT_CHECKLIST.md  # End-to-end live deploy guide
 ```

@@ -2,6 +2,13 @@
 
 Use this checklist to deploy a production-style demo safely.
 
+Repository:
+- https://github.com/saahilpal/RAG-DOCAnalyzer
+
+Architecture references:
+- Full project: [`docs/architecture.svg`](./docs/architecture.svg)
+- RAG core: [`docs/rag-architecture.svg`](./docs/rag-architecture.svg)
+
 ## 1) Supabase
 
 1. Create a new Supabase project.
