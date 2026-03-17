@@ -92,7 +92,6 @@ Added and wired in backend config/runtime:
 .
 ├── src/                       # Backend source (Express, RAG logic, Services)
 ├── database/schema.sql        # Unified Supabase Postgres schema
-├── sample_docs/               # Preloaded sample PDF for demo seeding
 ├── frontend/                  # Next.js frontend (App Router, Framer Motion)
 ├── docs/architecture.svg      # System-wide architectural diagram
 ├── docs/rag-architecture.svg  # Detailed RAG pipeline visualization

@@ -55,12 +55,6 @@ const envSchema = z.object({
   GITHUB_REPOSITORY_URL: z.string().url().default('https://github.com/saahilpal/RAG-DOCAnalyzer'),
   RUN_LOCALLY_GUIDE_URL: z.string().url().default('https://github.com/saahilpal/RAG-DOCAnalyzer#quick-start'),
 
-  SAMPLE_DOC_PATH: z.string().default('sample_docs/system_design_primer.pdf'),
-  ENABLE_SAMPLE_DOC_SEED: z
-    .string()
-    .optional()
-    .transform((value) => (value == null ? true : value.toLowerCase() === 'true')),
-
   SMTP_HOST: z.string().optional(),
   SMTP_PORT: z.coerce.number().int().positive().optional(),
   SMTP_USER: z.string().optional(),
@@ -146,9 +140,6 @@ module.exports = {
 
   githubRepositoryUrl: env.GITHUB_REPOSITORY_URL,
   runLocallyGuideUrl: env.RUN_LOCALLY_GUIDE_URL,
-
-  sampleDocPath: env.SAMPLE_DOC_PATH,
-  enableSampleDocSeed: env.ENABLE_SAMPLE_DOC_SEED,
 
   smtp: {
     host: env.SMTP_HOST,

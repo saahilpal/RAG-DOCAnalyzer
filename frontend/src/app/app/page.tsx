@@ -353,8 +353,6 @@ export default function DashboardChatPage() {
                   </span>
                 </div>
 
-                {selectedDocument.is_sample ? <Badge tone="muted">Preloaded sample document</Badge> : null}
-
                 <div>
                   <p className="mb-2 text-xs uppercase tracking-[0.08em] text-neutral-500">Extracted preview</p>
                   <p className="rounded-xl border border-neutral-200 bg-neutral-50 p-3 text-neutral-600">

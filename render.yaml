@@ -79,10 +79,6 @@ services:
         sync: false
       - key: RUN_LOCALLY_GUIDE_URL
         sync: false
-      - key: SAMPLE_DOC_PATH
-        value: sample_docs/system_design_primer.pdf
-      - key: ENABLE_SAMPLE_DOC_SEED
-        value: true
       - key: SMTP_HOST
         sync: false
       - key: SMTP_PORT

@@ -5,12 +5,8 @@ CREATE TABLE IF NOT EXISTS users (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   email TEXT UNIQUE NOT NULL,
   password_hash TEXT NOT NULL,
-  sample_seeded_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-
-ALTER TABLE users
-  ADD COLUMN IF NOT EXISTS sample_seeded_at TIMESTAMPTZ;
 
 CREATE TABLE IF NOT EXISTS documents (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -23,7 +19,6 @@ CREATE TABLE IF NOT EXISTS documents (
   chunk_count INTEGER NOT NULL DEFAULT 0,
   indexing_status TEXT NOT NULL DEFAULT 'indexed' CHECK (indexing_status IN ('processing', 'indexed', 'error')),
   text_preview TEXT,
-  is_sample BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE (user_id, document_hash)
 );

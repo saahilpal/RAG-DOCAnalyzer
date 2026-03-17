@@ -12,7 +12,6 @@ export type DocumentRecord = {
   chunk_count: number;
   indexing_status: 'processing' | 'indexed' | 'error';
   text_preview: string | null;
-  is_sample: boolean;
   created_at: string;
 };
 

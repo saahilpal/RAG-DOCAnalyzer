@@ -10,7 +10,6 @@ const {
   resetPassword,
 } = require('../services/authService');
 const { sendOtpEmail } = require('../services/mailService');
-const { ensureSampleDocumentForUserLazy } = require('../services/demoService');
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -26,7 +25,6 @@ function getAuthCookieOptions() {
 
 async function register(req, res) {
   const user = await registerUser(req.body);
-  await ensureSampleDocumentForUserLazy(user.id);
   const token = signAuthToken(user);
 
   res.cookie(env.authCookieName, token, getAuthCookieOptions());
@@ -36,7 +34,6 @@ async function register(req, res) {
 
 async function login(req, res) {
   const user = await loginUser(req.body);
-  await ensureSampleDocumentForUserLazy(user.id);
   const token = signAuthToken(user);
 
   res.cookie(env.authCookieName, token, getAuthCookieOptions());
@@ -56,7 +53,6 @@ async function logout(_req, res) {
 
 async function me(req, res) {
   const user = await getUserById(req.auth.userId);
-  await ensureSampleDocumentForUserLazy(user.id);
   return ok(res, { user });
 }
 

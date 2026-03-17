@@ -112,7 +112,6 @@ async function findDocumentByHashForUser(userId, documentHash) {
             chunk_count,
             indexing_status,
             text_preview,
-            is_sample,
             created_at
      FROM documents
      WHERE user_id = $1
@@ -159,10 +158,9 @@ async function insertDocumentWithChunkReuse({ userId, file, documentHash, reusab
             page_count,
             chunk_count,
             indexing_status,
-            text_preview,
-            is_sample
+            text_preview
          )
-         VALUES ($1, $2, $3, $4, $5, $6, $7, 'indexed', $8, FALSE)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, 'indexed', $8)
          RETURNING id,
                    user_id,
                    file_name,
@@ -171,7 +169,6 @@ async function insertDocumentWithChunkReuse({ userId, file, documentHash, reusab
                    chunk_count,
                    indexing_status,
                    text_preview,
-                   is_sample,
                    created_at`,
         [
           userId,
@@ -237,7 +234,7 @@ async function buildChunkRecords(chunks) {
   return chunkEmbeddings;
 }
 
-async function uploadAndIndexDocument({ userId, file, source = 'user', bypassDocumentLimit = false }) {
+async function uploadAndIndexDocument({ userId, file, bypassDocumentLimit = false }) {
   validatePdfFile(file);
 
   const documentHash = createDocumentHash(file.buffer);
@@ -300,10 +297,9 @@ async function uploadAndIndexDocument({ userId, file, source = 'user', bypassDoc
             page_count,
             chunk_count,
             indexing_status,
-            text_preview,
-            is_sample
+            text_preview
          )
-         VALUES ($1, $2, $3, $4, $5, $6, $7, 'indexed', $8, $9)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, 'indexed', $8)
          RETURNING id,
                    user_id,
                    file_name,
@@ -312,7 +308,6 @@ async function uploadAndIndexDocument({ userId, file, source = 'user', bypassDoc
                    chunk_count,
                    indexing_status,
                    text_preview,
-                   is_sample,
                    created_at`,
         [
           userId,
@@ -323,7 +318,6 @@ async function uploadAndIndexDocument({ userId, file, source = 'user', bypassDoc
           pageCount,
           chunkRecords.length,
           buildTextPreview(text),
-          source === 'sample',
         ],
       );
 
@@ -381,7 +375,6 @@ async function listDocuments({ userId, limit = 50 }) {
             chunk_count,
             indexing_status,
             text_preview,
-            is_sample,
             created_at
      FROM documents
      WHERE user_id = $1
@@ -405,7 +398,6 @@ async function getOwnedDocument({ userId, documentId }) {
             chunk_count,
             indexing_status,
             text_preview,
-            is_sample,
             created_at
      FROM documents
      WHERE id = $1 AND user_id = $2
