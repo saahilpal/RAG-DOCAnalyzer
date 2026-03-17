@@ -41,6 +41,14 @@ Set required secret env vars in Render:
 - `GITHUB_REPOSITORY_URL`
 - `RUN_LOCALLY_GUIDE_URL`
 
+Recommended RAG tuning env vars:
+- `RAG_TOP_K=5`
+- `RAG_CANDIDATE_PAGE_SIZE=400`
+- `RAG_HISTORY_LIMIT=50`
+- `RAG_TOKEN_TO_CHAR_RATIO=4`
+- `RAG_CHUNK_TOKENS=1000`
+- `RAG_CHUNK_OVERLAP_TOKENS=200`
+
 Health endpoint:
 - `/api/health/live`
 

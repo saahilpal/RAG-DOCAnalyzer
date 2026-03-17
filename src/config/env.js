@@ -42,6 +42,13 @@ const envSchema = z.object({
   MAX_DOCS_PER_USER: z.coerce.number().int().positive().default(3),
   CACHE_TTL_SECONDS: z.coerce.number().int().positive().default(600),
 
+  RAG_TOP_K: z.coerce.number().int().positive().optional(),
+  RAG_CANDIDATE_PAGE_SIZE: z.coerce.number().int().positive().default(400),
+  RAG_HISTORY_LIMIT: z.coerce.number().int().positive().default(50),
+  RAG_TOKEN_TO_CHAR_RATIO: z.coerce.number().positive().default(4),
+  RAG_CHUNK_TOKENS: z.coerce.number().int().positive().optional(),
+  RAG_CHUNK_OVERLAP_TOKENS: z.coerce.number().int().nonnegative().optional(),
+
   CHUNK_SIZE_TOKENS: z.coerce.number().int().positive().default(450),
   CHUNK_OVERLAP_TOKENS: z.coerce.number().int().nonnegative().default(80),
 
@@ -65,6 +72,18 @@ if (!parsed.success) {
 }
 
 const env = parsed.data;
+
+const ragTopK = env.RAG_TOP_K || env.MAX_CONTEXT_CHUNKS;
+const ragCandidatePageSize = Math.max(env.RAG_CANDIDATE_PAGE_SIZE, ragTopK);
+const ragChunkTokens = env.RAG_CHUNK_TOKENS || env.CHUNK_SIZE_TOKENS;
+const ragChunkOverlapTokens =
+  env.RAG_CHUNK_OVERLAP_TOKENS != null ? env.RAG_CHUNK_OVERLAP_TOKENS : env.CHUNK_OVERLAP_TOKENS;
+
+if (ragChunkOverlapTokens >= ragChunkTokens) {
+  throw new Error(
+    `Invalid environment configuration:\nRAG_CHUNK_OVERLAP_TOKENS must be smaller than RAG_CHUNK_TOKENS.`,
+  );
+}
 
 const maxUploadFileSizeBytes = env.MAX_UPLOAD_FILE_SIZE_BYTES || env.MAX_FILE_SIZE_MB * 1024 * 1024;
 
@@ -104,13 +123,20 @@ module.exports = {
   maxUploadFileSizeBytes,
   maxPagesPerDoc: env.MAX_PAGES_PER_DOC,
   maxChunksPerDoc: env.MAX_CHUNKS_PER_DOC,
-  maxContextChunks: env.MAX_CONTEXT_CHUNKS,
+  maxContextChunks: ragTopK,
   maxChatRequestsPerDay: env.MAX_CHAT_REQUESTS_PER_DAY,
   maxDocsPerUser: env.MAX_DOCS_PER_USER,
   cacheTtlSeconds: env.CACHE_TTL_SECONDS,
 
-  chunkSizeTokens: env.CHUNK_SIZE_TOKENS,
-  chunkOverlapTokens: env.CHUNK_OVERLAP_TOKENS,
+  ragTopK,
+  ragCandidatePageSize,
+  ragHistoryLimit: env.RAG_HISTORY_LIMIT,
+  ragTokenToCharRatio: env.RAG_TOKEN_TO_CHAR_RATIO,
+  ragChunkTokens,
+  ragChunkOverlapTokens,
+
+  chunkSizeTokens: ragChunkTokens,
+  chunkOverlapTokens: ragChunkOverlapTokens,
 
   githubRepositoryUrl: env.GITHUB_REPOSITORY_URL,
   runLocallyGuideUrl: env.RUN_LOCALLY_GUIDE_URL,

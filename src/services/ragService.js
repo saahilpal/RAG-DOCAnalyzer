@@ -13,6 +13,18 @@ function normalizeChunks(rows) {
   }));
 }
 
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function getPromptChunkCharLimit() {
+  return clamp(Math.floor(env.ragChunkTokens * env.ragTokenToCharRatio), 400, 4000);
+}
+
+function getFallbackSnippetLimit() {
+  return clamp(Math.floor(getPromptChunkCharLimit() / 4), 180, 1000);
+}
+
 async function retrieveFtsChunks({ userId, documentId, query }) {
   let result;
   try {
@@ -26,14 +38,14 @@ async function retrieveFtsChunks({ userId, documentId, query }) {
          AND c.search_vector @@ websearch_to_tsquery('english', $3)
        ORDER BY score DESC, c.chunk_index ASC
        LIMIT $4`,
-      [userId, documentId, query, env.maxContextChunks],
+      [userId, documentId, query, env.ragCandidatePageSize],
     );
   } catch (_error) {
     result = { rowCount: 0, rows: [] };
   }
 
   if (result.rowCount > 0) {
-    return normalizeChunks(result.rows);
+    return normalizeChunks(result.rows).slice(0, env.ragTopK);
   }
 
   const fallback = await db.query(
@@ -44,7 +56,7 @@ async function retrieveFtsChunks({ userId, documentId, query }) {
        AND c.document_id = $2
      ORDER BY c.chunk_index ASC
      LIMIT $3`,
-    [userId, documentId, env.maxContextChunks],
+    [userId, documentId, env.ragTopK],
   );
 
   return normalizeChunks(fallback.rows);
@@ -63,7 +75,7 @@ async function retrieveVectorChunks({ userId, documentId, query }) {
        AND c.embedding IS NOT NULL
      ORDER BY c.embedding <-> $3::vector
      LIMIT $4`,
-    [userId, documentId, vectorLiteral, env.maxContextChunks],
+    [userId, documentId, vectorLiteral, env.ragTopK],
   );
 
   if (result.rowCount === 0) {
@@ -82,10 +94,14 @@ async function retrieveRelevantChunks({ userId, documentId, query }) {
 }
 
 function buildPrompt({ query, chunks }) {
+  const chunkCharLimit = getPromptChunkCharLimit();
   const context =
     chunks.length > 0
       ? chunks
-          .map((chunk, index) => `[Chunk ${index + 1}] ${chunk.content}`)
+          .map((chunk, index) => {
+            const trimmed = chunk.content.replace(/\s+/g, ' ').trim().slice(0, chunkCharLimit);
+            return `[Chunk ${index + 1}] ${trimmed}`;
+          })
           .join('\n\n')
       : 'No relevant context was retrieved from the document.';
 
@@ -106,10 +122,11 @@ function buildFallbackAnswer({ query, chunks }) {
     return `I could not find matching context for: "${query}". Upload or select a document with relevant content and try again.`;
   }
 
+  const snippetLimit = getFallbackSnippetLimit();
   const bulletPoints = chunks
     .map((chunk, index) => {
-      const sentence = chunk.content.replace(/\s+/g, ' ').trim().slice(0, 280);
-      return `${index + 1}. ${sentence}${sentence.length >= 280 ? '...' : ''}`;
+      const sentence = chunk.content.replace(/\s+/g, ' ').trim().slice(0, snippetLimit);
+      return `${index + 1}. ${sentence}${sentence.length >= snippetLimit ? '...' : ''}`;
     })
     .join('\n');
 
@@ -191,7 +208,7 @@ async function streamRagAnswer({ userId, documentId, query, onToken, shouldAbort
 
   const sourceChunks = chunks.map((chunk) => ({
     chunkIndex: chunk.chunkIndex,
-    content: chunk.content.slice(0, 400),
+    content: chunk.content.slice(0, getFallbackSnippetLimit()),
   }));
 
   try {

@@ -59,7 +59,7 @@ const DEFAULT_LIMITS: DemoLimits = {
   maxFileSizeMb: 10,
   maxPagesPerDoc: 40,
   maxChunksPerDoc: 200,
-  maxContextChunks: 4,
+  maxContextChunks: 5,
   maxChatRequestsPerDay: 20,
   maxDocsPerUser: 3,
   cacheTtlSeconds: 600,

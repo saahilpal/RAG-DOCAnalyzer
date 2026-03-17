@@ -1,3 +1,4 @@
+const env = require('../config/env');
 const db = require('../database/client');
 const { badRequest, notFound } = require('../utils/errors');
 
@@ -103,10 +104,15 @@ async function listSessionMessages({ userId, sessionId }) {
 
   const result = await db.query(
     `SELECT id, session_id, role, content, fallback_used, created_at
-     FROM messages
-     WHERE session_id = $1
+     FROM (
+       SELECT id, session_id, role, content, fallback_used, created_at
+       FROM messages
+       WHERE session_id = $1
+       ORDER BY created_at DESC
+       LIMIT $2
+     ) recent_messages
      ORDER BY created_at ASC`,
-    [sessionId],
+    [sessionId, env.ragHistoryLimit],
   );
 
   return result.rows;

@@ -112,7 +112,7 @@ async function sessions(req, res) {
   const rows = await listSessions({
     userId: req.auth.userId,
     documentId: req.query.documentId || null,
-    limit: req.query.limit || 50,
+    limit: req.query.limit || env.ragHistoryLimit,
   });
 
   return ok(res, { sessions: rows });

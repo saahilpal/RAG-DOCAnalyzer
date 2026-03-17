@@ -1,26 +1,36 @@
 # RAG DOCAnalyzer
 
-Production-style **stateless RAG system** designed to run reliably on free-tier infrastructure.
+Production-style, stateless Document RAG system built for reliable free-tier demos.
 
 ![Node.js](https://img.shields.io/badge/Node.js-Express-black?style=flat-square)
 ![Next.js](https://img.shields.io/badge/Next.js-App%20Router-black?style=flat-square)
 ![Supabase](https://img.shields.io/badge/Supabase-Postgres%20%2B%20Storage-black?style=flat-square)
 ![Gemini](https://img.shields.io/badge/Google-Gemini%201.5%20Flash-black?style=flat-square)
 
-## Why This Project
+## RAG Rewrite Summary
 
-This repo is intentionally built as a **public demo environment**:
+This project was rewritten from a local-state prototype into a stateless cloud architecture.
 
-- strict limits are intentional
-- cost protection is required
-- abuse prevention is required
-- reliability under free-tier constraints is required
+Removed from legacy version:
+- SQLite and `better-sqlite3`
+- local uploads folder and local file persistence
+- local ONNX/Transformers embeddings and `@xenova/transformers`
+- in-memory/background job queue patterns
 
-For unlimited usage, run locally with your own API key and adjust limits.
+Replaced with:
+- Supabase Postgres for all persistent data
+- Supabase Storage for PDF files
+- PostgreSQL FTS as default retrieval
+- Optional pgvector retrieval mode
+- Gemini generation over SSE with deterministic fallback path
+
+This repository contains the full project:
+- backend API (`src/`)
+- frontend app (`frontend/`)
+- schema and deployment configs (`database/`, `render.yaml`, `frontend/vercel.json`)
+- docs and architecture diagrams (`docs/`)
 
 ## Architecture
-
-This repository contains the **entire project**: backend API, frontend app, database schema, deployment config, and docs.
 
 ### Full Project Architecture
 
@@ -30,13 +40,67 @@ This repository contains the **entire project**: backend API, frontend app, data
 
 ![RAG Core Architecture](./docs/rag-architecture.svg)
 
+## End-to-End RAG Flow
+
+### 1) Upload and Index
+
+1. User uploads PDF to `POST /api/documents/upload`.
+2. API validates file type, size, and PDF signature.
+3. PDF text is extracted with `pdf-parse`.
+4. Text is chunked with overlap.
+5. Chunks are stored in Postgres with `search_vector`.
+6. Optional vector embeddings are generated only in `RETRIEVAL_MODE=vector`.
+7. File is stored in Supabase Storage (`documents` bucket).
+
+### 2) Chat and Retrieval
+
+1. User sends query to `POST /api/chat/stream`.
+2. Auth, per-IP rate limit, and per-user daily quota are checked.
+3. Query cache is checked with key `(document_id + normalized_query)`.
+4. Retrieval runs in default FTS mode (`websearch_to_tsquery` + `ts_rank_cd`).
+5. Top chunks are injected into the RAG prompt.
+6. Gemini streams tokens via SSE.
+7. If AI fails (`AI_QUOTA_EXCEEDED`, `AI_TIMEOUT`, `AI_TEMPORARILY_UNAVAILABLE`), extractive fallback is returned.
+8. Response is persisted to session history and cached with TTL.
+
+## Demo Guardrails (Intentional)
+
+This public deployment is a trial/demo environment. Limits are strict by design for reliability and cost control.
+
+| Control | Env key | Default |
+|---|---|---|
+| Max file size | `MAX_FILE_SIZE_MB` | `10` |
+| Max pages per document | `MAX_PAGES_PER_DOC` | `40` |
+| Max chunks per document | `MAX_CHUNKS_PER_DOC` | `200` |
+| Max context chunks to AI | `RAG_TOP_K` | `5` |
+| Max documents per user | `MAX_DOCS_PER_USER` | `3` |
+| Max chat requests per day | `MAX_CHAT_REQUESTS_PER_DAY` | `20` |
+| Query cache TTL (seconds) | `CACHE_TTL_SECONDS` | `600` |
+
+## RAG Tuning Variables
+
+Added and wired in backend config/runtime:
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `RAG_TOP_K` | `5` | Final chunks sent to the model |
+| `RAG_CANDIDATE_PAGE_SIZE` | `400` | Candidate rows considered before top-k slice |
+| `RAG_HISTORY_LIMIT` | `50` | Max messages returned for a session history call |
+| `RAG_TOKEN_TO_CHAR_RATIO` | `4` | Approx token-to-char ratio used for prompt/fallback clipping |
+| `RAG_CHUNK_TOKENS` | `1000` | Chunk size for ingestion |
+| `RAG_CHUNK_OVERLAP_TOKENS` | `200` | Chunk overlap for ingestion |
+
+Compatibility notes:
+- `MAX_CONTEXT_CHUNKS` and `CHUNK_SIZE_TOKENS`/`CHUNK_OVERLAP_TOKENS` are still supported.
+- If both old and new keys are set, `RAG_*` values take precedence.
+
 ## Tech Stack
 
-- Frontend: Next.js (App Router), TypeScript, TailwindCSS, Framer Motion
+- Frontend: Next.js App Router, TypeScript, TailwindCSS, Framer Motion
 - Backend: Node.js, Express, SSE streaming
-- Database: Supabase PostgreSQL (`pg`, optional `pgvector`)
-- Retrieval: PostgreSQL Full-Text Search by default
-- Storage: Supabase Storage (`documents` bucket)
+- Database: Supabase Postgres (`pg`)
+- Retrieval: Postgres FTS (default), pgvector (optional)
+- Storage: Supabase Storage
 - AI: Gemini (`gemini-1.5-flash`, optional `text-embedding-004`)
 - Auth: JWT + HTTP-only cookie + bcrypt
 
@@ -44,56 +108,66 @@ This repository contains the **entire project**: backend API, frontend app, data
 
 ```text
 .
-├── src/                     # Backend source
-├── database/schema.sql      # Supabase schema
-├── sample_docs/             # Preloaded sample PDF
-├── frontend/                # Next.js frontend app
-├── docs/architecture.svg    # Architecture image
-├── docs/rag-architecture.svg # RAG pipeline image
-├── render.yaml              # Render deployment blueprint
-└── DEPLOYMENT_CHECKLIST.md  # End-to-end live deploy guide
+├── src/                       # Backend source
+├── database/schema.sql        # Supabase schema
+├── sample_docs/               # Preloaded sample PDF
+├── frontend/                  # Next.js frontend app
+├── docs/architecture.svg      # Full system architecture
+├── docs/rag-architecture.svg  # RAG pipeline architecture
+├── render.yaml                # Render deployment blueprint
+└── DEPLOYMENT_CHECKLIST.md    # Deployment guide
 ```
 
-## Key Features
+## API Endpoints
 
-- Stateless architecture (no local DB, no local file storage)
-- Hard upload and usage limits for free-tier safety
-- Atomic per-user daily chat quota
-- FTS-first retrieval pipeline (no mandatory embedding cost)
-- Optional vector mode (`RETRIEVAL_MODE=vector`)
-- Gemini generation with explicit fallback response path
-- Query cache with TTL
-- Strict security middleware (`helmet`, `cors`, rate limit, origin guard)
-- Health endpoints (`/api/health/live`, `/api/health/ready`)
+Auth:
+- `POST /api/auth/register`
+- `POST /api/auth/login`
+- `POST /api/auth/logout`
+- `GET /api/auth/me`
 
-## Demo Limits (Default)
+Documents:
+- `POST /api/documents/upload`
+- `GET /api/documents`
+- `DELETE /api/documents/:id`
 
-- `10MB` max file size
-- `40` max pages per document
-- `200` max chunks per document
-- `4` max context chunks sent to model
-- `20` max chat requests per user per day
-- `3` max documents per user
-- `10 min` query cache TTL
+Chat:
+- `POST /api/chat/stream`
+- `GET /api/chat/sessions`
+- `GET /api/chat/sessions/:sessionId/messages`
+- `GET /api/chat/quota`
 
-## Quick Start
+System:
+- `GET /api/health`
+- `GET /api/health/live`
+- `GET /api/health/ready`
+- `GET /api/limits`
+
+## Environment Variables
+
+Backend env template: [`.env.example`](./.env.example)
+
+Required backend keys:
+- `DATABASE_URL`
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_KEY`
+- `GEMINI_API_KEY`
+- `JWT_SECRET`
+- `CORS_ORIGIN`
+
+Frontend env template: [`frontend/.env.example`](./frontend/.env.example)
+
+Required frontend key:
+- `NEXT_PUBLIC_API_URL`
+
+## Quick Start (Local)
 
 ### 1) Backend
 
 ```bash
 npm install
 cp .env.example .env
-```
-
-Run schema on Supabase:
-
-```bash
 npm run db:schema
-```
-
-Start backend:
-
-```bash
 npm run dev
 ```
 
@@ -106,60 +180,21 @@ cp .env.example .env.local
 npm run dev
 ```
 
-Frontend env:
-
-- `NEXT_PUBLIC_API_URL=http://localhost:4000`
-
 ## Validation
 
 From repo root:
 
 ```bash
 npm test
+npm run frontend:lint
+npm run frontend:build
 ```
-
-From `frontend/`:
-
-```bash
-npm run lint
-npm run build
-```
-
-## Backend Environment Variables
-
-See [`.env.example`](./.env.example).
-
-Required minimum:
-
-- `DATABASE_URL`
-- `SUPABASE_URL`
-- `SUPABASE_SERVICE_KEY`
-- `GEMINI_API_KEY`
-- `JWT_SECRET`
-- `CORS_ORIGIN`
-
-## API Endpoints
-
-- `POST /api/auth/register`
-- `POST /api/auth/login`
-- `POST /api/auth/logout`
-- `GET /api/auth/me`
-- `POST /api/documents/upload`
-- `GET /api/documents`
-- `DELETE /api/documents/:id`
-- `POST /api/chat/stream`
-- `GET /api/chat/sessions`
-- `GET /api/chat/sessions/:sessionId/messages`
-- `GET /api/chat/quota`
-- `GET /api/health/live`
-- `GET /api/health/ready`
-- `GET /api/limits`
 
 ## Deployment
 
-- Backend (Render): [render.yaml](./render.yaml)
-- Frontend (Vercel): [frontend/vercel.json](./frontend/vercel.json)
-- Full guide: [DEPLOYMENT_CHECKLIST.md](./DEPLOYMENT_CHECKLIST.md)
+- Backend on Render: [render.yaml](./render.yaml)
+- Frontend on Vercel: [frontend/vercel.json](./frontend/vercel.json)
+- Step-by-step checklist: [DEPLOYMENT_CHECKLIST.md](./DEPLOYMENT_CHECKLIST.md)
 
 ## Developer
 
