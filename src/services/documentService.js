@@ -85,11 +85,7 @@ async function extractPdfData(buffer) {
   };
 }
 
-async function assertUserDocumentLimit(userId, bypassDocumentLimit = false) {
-  if (bypassDocumentLimit) {
-    return;
-  }
-
+async function assertUserDocumentLimit(userId) {
   const result = await db.query('SELECT COUNT(*)::int AS count FROM documents WHERE user_id = $1', [userId]);
   const count = result.rows[0]?.count || 0;
 
@@ -234,7 +230,7 @@ async function buildChunkRecords(chunks) {
   return chunkEmbeddings;
 }
 
-async function uploadAndIndexDocument({ userId, file, bypassDocumentLimit = false }) {
+async function uploadAndIndexDocument({ userId, file }) {
   validatePdfFile(file);
 
   const documentHash = createDocumentHash(file.buffer);
@@ -249,7 +245,7 @@ async function uploadAndIndexDocument({ userId, file, bypassDocumentLimit = fals
     };
   }
 
-  await assertUserDocumentLimit(userId, bypassDocumentLimit);
+  await assertUserDocumentLimit(userId);
 
   const reusableDocument = await findReusableDocumentByHash(documentHash);
   if (reusableDocument) {
