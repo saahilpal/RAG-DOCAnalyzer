@@ -7,29 +7,6 @@ Production-style, stateless Document RAG system built for reliable free-tier dem
 ![Supabase](https://img.shields.io/badge/Supabase-Postgres%20%2B%20Storage-black?style=flat-square)
 ![Gemini](https://img.shields.io/badge/Google-Gemini%201.5%20Flash-black?style=flat-square)
 
-## RAG Rewrite Summary
-
-This project was rewritten from a local-state prototype into a stateless cloud architecture.
-
-Removed from legacy version:
-- SQLite and `better-sqlite3`
-- local uploads folder and local file persistence
-- local ONNX/Transformers embeddings and `@xenova/transformers`
-- in-memory/background job queue patterns
-
-Replaced with:
-- Supabase Postgres for all persistent data
-- Supabase Storage for PDF files
-- PostgreSQL FTS as default retrieval
-- Optional pgvector retrieval mode
-- Gemini generation over SSE with deterministic fallback path
-
-This repository contains the full project:
-- backend API (`src/`)
-- frontend app (`frontend/`)
-- schema and deployment configs (`database/`, `render.yaml`, `frontend/vercel.json`)
-- docs and architecture diagrams (`docs/`)
-
 ## Architecture
 
 ### Full Project Architecture
@@ -89,10 +66,6 @@ Added and wired in backend config/runtime:
 | `RAG_TOKEN_TO_CHAR_RATIO` | `4` | Approx token-to-char ratio used for prompt/fallback clipping |
 | `RAG_CHUNK_TOKENS` | `1000` | Chunk size for ingestion |
 | `RAG_CHUNK_OVERLAP_TOKENS` | `200` | Chunk overlap for ingestion |
-
-Compatibility notes:
-- `MAX_CONTEXT_CHUNKS` and `CHUNK_SIZE_TOKENS`/`CHUNK_OVERLAP_TOKENS` are still supported.
-- If both old and new keys are set, `RAG_*` values take precedence.
 
 ## Tech Stack
 
