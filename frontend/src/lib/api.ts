@@ -61,7 +61,15 @@ type ApiFailure = {
 
 type ApiResponse<T> = ApiSuccess<T> | ApiFailure;
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+const RAW_API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+const API_BASE_URL = RAW_API_URL.replace(/\/+$/, '');
+
+if (typeof window !== 'undefined' && !process.env.NEXT_PUBLIC_API_URL) {
+  console.warn(
+    '[api] NEXT_PUBLIC_API_URL is not set. Falling back to http://localhost:4000. ' +
+      'Set this env var in .env.local or your deployment platform.',
+  );
+}
 
 function isFormData(value: unknown): value is FormData {
   return typeof FormData !== 'undefined' && value instanceof FormData;

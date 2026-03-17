@@ -17,7 +17,7 @@ const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 function getAuthCookieOptions() {
   return {
     httpOnly: true,
-    sameSite: 'strict',
+    sameSite: 'lax',
     secure: env.isProduction,
     maxAge: SEVEN_DAYS_MS,
     path: '/',
