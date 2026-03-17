@@ -1,123 +1,161 @@
-# Document Analyzer RAG Backend
+# Document Analyzer RAG
 
-Production-focused Node.js backend for document Q&A with retrieval-augmented generation (RAG).
+Production-style **stateless RAG system** designed to run reliably on free-tier infrastructure.
 
-It supports secure multi-format document ingestion (`pdf`, `docx`, `csv`, `md`, `txt`), local ONNX embeddings (`@xenova/transformers`), SQLite vector retrieval (`better-sqlite3`), JWT auth, background indexing jobs, and SSE chat streaming.
+![Node.js](https://img.shields.io/badge/Node.js-Express-black?style=flat-square)
+![Next.js](https://img.shields.io/badge/Next.js-App%20Router-black?style=flat-square)
+![Supabase](https://img.shields.io/badge/Supabase-Postgres%20%2B%20Storage-black?style=flat-square)
+![Gemini](https://img.shields.io/badge/Google-Gemini%201.5%20Flash-black?style=flat-square)
 
-Gemini is used only for chat generation. Embeddings and retrieval are local.
+## Why This Project
+
+This repo is intentionally built as a **public demo environment**:
+
+- strict limits are intentional
+- cost protection is required
+- abuse prevention is required
+- reliability under free-tier constraints is required
+
+For unlimited usage, run locally with your own API key and adjust limits.
 
 ## Architecture
 
-The codebase follows a modular backend layout:
+![Document Analyzer RAG Architecture](./docs/architecture.svg)
+
+## Tech Stack
+
+- Frontend: Next.js (App Router), TypeScript, TailwindCSS, Framer Motion
+- Backend: Node.js, Express, SSE streaming
+- Database: Supabase PostgreSQL (`pg`, optional `pgvector`)
+- Retrieval: PostgreSQL Full-Text Search by default
+- Storage: Supabase Storage (`documents` bucket)
+- AI: Gemini (`gemini-1.5-flash`, optional `text-embedding-004`)
+- Auth: JWT + HTTP-only cookie + bcrypt
+
+## Monorepo Structure
 
 ```text
-src/
- ├── app.js
- ├── server.js
- ├── config/
- ├── routes/api/v1/
- ├── controllers/
- ├── services/
- ├── middleware/
- ├── parsers/
- ├── utils/
- ├── jobs/
- └── database/
+.
+├── src/                     # Backend source
+├── database/schema.sql      # Supabase schema
+├── sample_docs/             # Preloaded sample PDF
+├── frontend/                # Next.js frontend app
+├── docs/architecture.svg    # Architecture image
+├── render.yaml              # Render deployment blueprint
+└── DEPLOYMENT_CHECKLIST.md  # End-to-end live deploy guide
 ```
 
-Detailed docs:
-- `docs/architecture.md`
-- `docs/api_reference.md`
-- `docs/rag_pipeline.md`
-- `docs/system_limits.md`
-- `docs/deployment.md`
+## Key Features
 
-## RAG Pipeline
+- Stateless architecture (no local DB, no local file storage)
+- Hard upload and usage limits for free-tier safety
+- Atomic per-user daily chat quota
+- FTS-first retrieval pipeline (no mandatory embedding cost)
+- Optional vector mode (`RETRIEVAL_MODE=vector`)
+- Gemini generation with explicit fallback response path
+- Query cache with TTL
+- Strict security middleware (`helmet`, `cors`, rate limit, origin guard)
+- Health endpoints (`/api/health/live`, `/api/health/ready`)
 
-1. Upload document to `/api/v1/sessions/:sessionId/pdfs`.
-2. Server validates extension + MIME + magic bytes.
-3. Background job parses and chunks extracted text.
-4. Local embedding model generates vectors.
-5. Vectors are stored in SQLite `chunks` table.
-6. Chat request retrieves bounded top candidates by cosine similarity.
-7. Prompt is built from context + history and sent to Gemini.
-   - If no context chunks are found, Gemini may fall back to answering general knowledge questions.
-8. Response is returned sync/async, with SSE streaming support.
+## Demo Limits (Default)
 
-> If the session has no documents, the chat endpoint short-circuits and gracefully returns a normal assistant message asking for an upload. It won't throw PDF_NOT_READY errors.
+- `10MB` max file size
+- `40` max pages per document
+- `200` max chunks per document
+- `4` max context chunks sent to model
+- `20` max chat requests per user per day
+- `3` max documents per user
+- `10 min` query cache TTL
 
-> **Session Titles**: The conversation title is not generated immediately. Title generation triggers on message 2, and may automatically refine continuously for long conversations (≥ 6 messages).
+## Quick Start
 
-
-## Installation
+### 1) Backend
 
 ```bash
 npm install
 cp .env.example .env
-npm run migrate
-npm run dev
 ```
 
-Server starts at `http://HOST:PORT` (defaults: `0.0.0.0:4000`).
+Run schema on Supabase:
 
-## Environment Variables
+```bash
+npm run db:schema
+```
 
-See `.env.example` for all variables.
-
-Core runtime variables:
-- `PORT`, `HOST`, `NODE_ENV`, `DB_PATH`
-- `MAX_UPLOAD_FILE_SIZE_BYTES`, `MAX_DOCS_PER_SESSION`, `MAX_PDF_PAGES`
-- `MAX_CHUNKS_PER_QUERY`, `MAX_EXTRACTED_TEXT_LENGTH`
-- `GEMINI_API_KEY`, `GEMINI_MODEL`
-- `JWT_SECRET`
-
-## System Limits
-
-Default production limits:
-- Max upload file size: `30MB`
-- Max documents per session: `5`
-- Max PDF pages: `150`
-- Max chunks scanned per query: `2000`
-- Max extracted text length: `2,000,000` chars
-
-## Development Workflow
-
-Commands:
+Start backend:
 
 ```bash
 npm run dev
-npm run start
-npm run migrate
-npm run migrate:dry-run
-npm run test
 ```
 
-Notes:
-- Tests run with `NODE_ENV=test`.
-- Rate limit middleware is bypassed in tests.
-- No external Gemini calls are required for local indexing logic.
+### 2) Frontend
+
+```bash
+cd frontend
+npm install
+cp .env.example .env.local
+npm run dev
+```
+
+Frontend env:
+
+- `NEXT_PUBLIC_API_URL=http://localhost:4000`
+
+## Validation
+
+From repo root:
+
+```bash
+npm test
+```
+
+From `frontend/`:
+
+```bash
+npm run lint
+npm run build
+```
+
+## Backend Environment Variables
+
+See [`.env.example`](./.env.example).
+
+Required minimum:
+
+- `DATABASE_URL`
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_KEY`
+- `GEMINI_API_KEY`
+- `JWT_SECRET`
+- `CORS_ORIGIN`
+
+## API Endpoints
+
+- `POST /api/auth/register`
+- `POST /api/auth/login`
+- `POST /api/auth/logout`
+- `GET /api/auth/me`
+- `POST /api/documents/upload`
+- `GET /api/documents`
+- `DELETE /api/documents/:id`
+- `POST /api/chat/stream`
+- `GET /api/chat/sessions`
+- `GET /api/chat/sessions/:sessionId/messages`
+- `GET /api/chat/quota`
+- `GET /api/health/live`
+- `GET /api/health/ready`
+- `GET /api/limits`
 
 ## Deployment
 
-1. Set production `.env` values (especially `JWT_SECRET`, `GEMINI_API_KEY`, SMTP creds).
-2. Run migrations: `npm run migrate`.
-3. Start process: `npm run start`.
-4. Put behind reverse proxy (Nginx/Caddy/Cloudflare Tunnel).
-5. Enable `TRUST_PROXY=true` when behind proxy.
-6. For SSE, disable proxy buffering on chat stream endpoints.
+- Backend (Render): [render.yaml](./render.yaml)
+- Frontend (Vercel): [frontend/vercel.json](./frontend/vercel.json)
+- Full guide: [DEPLOYMENT_CHECKLIST.md](./DEPLOYMENT_CHECKLIST.md)
 
-See `docs/deployment.md` for full checklist.
+## Developer
 
-## Security Highlights
+**Sahil Pal**
 
-- JWT-protected API routes
-- Standardized structured error responses
-- Prepared statements for SQL operations
-- Upload hardening (extension + MIME + signature checks)
-- Path safety checks for file storage
-- Request body size limits
-- Per-session document limits
-
-## License
-
-ISC
+- GitHub: https://github.com/saahilpal
+- LinkedIn: https://www.linkedin.com/in/sahiilpal
+- LeetCode: https://leetcode.com/u/saahiilpal/

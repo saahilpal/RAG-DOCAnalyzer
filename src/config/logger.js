@@ -1,57 +1,39 @@
-function sanitizeMeta(meta) {
-  if (!meta || typeof meta !== 'object') {
-    return {};
-  }
+const env = require('./env');
 
-  const clean = {};
-  for (const [key, value] of Object.entries(meta)) {
-    if (value === undefined) {
-      continue;
-    }
-    if (typeof value === 'string') {
-      clean[key] = value.length > 300 ? `${value.slice(0, 297)}...` : value;
-      continue;
-    }
-    if (typeof value === 'number' || typeof value === 'boolean' || value === null) {
-      clean[key] = value;
-      continue;
-    }
-    clean[key] = String(value);
-  }
-  return clean;
-}
-
-function write(level, event, meta = {}) {
+function write(level, message, meta = null) {
   const payload = {
     ts: new Date().toISOString(),
     level,
-    event,
-    ...sanitizeMeta(meta),
+    message,
+    ...(meta ? { meta } : {}),
   };
 
   const line = JSON.stringify(payload);
-  if (level === 'ERROR') {
-    // eslint-disable-next-line no-console
+
+  if (level === 'error') {
     console.error(line);
     return;
   }
-  // eslint-disable-next-line no-console
-  console.info(line);
+
+  if (!env.isProduction || level !== 'debug') {
+    console.log(line);
+  }
 }
 
-function logInfo(event, meta = {}) {
-  write('INFO', event, meta);
+function info(message, meta) {
+  write('info', message, meta);
 }
 
-function logError(event, error, meta = {}) {
-  const message = error?.message ? String(error.message) : 'Unknown error';
-  write('ERROR', event, {
-    ...meta,
-    message,
-  });
+function error(message, meta) {
+  write('error', message, meta);
+}
+
+function debug(message, meta) {
+  write('debug', message, meta);
 }
 
 module.exports = {
-  logInfo,
-  logError,
+  info,
+  error,
+  debug,
 };

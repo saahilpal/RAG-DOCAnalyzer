@@ -1,0 +1,85 @@
+services:
+  - type: web
+    name: document-analyzer-rag-backend
+    runtime: node
+    plan: free
+    rootDir: .
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health/live
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
+      - key: PORT
+        value: 10000
+      - key: DATABASE_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      - key: SUPABASE_STORAGE_BUCKET
+        value: documents
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-1.5-flash
+      - key: GEMINI_EMBEDDING_MODEL
+        value: text-embedding-004
+      - key: EMBEDDING_DIMENSION
+        value: 384
+      - key: AI_TIMEOUT_MS
+        value: 12000
+      - key: RETRIEVAL_MODE
+        value: fts
+      - key: JWT_SECRET
+        sync: false
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: AUTH_COOKIE_NAME
+        value: doc_analyzer_token
+      - key: CORS_ORIGIN
+        sync: false
+      - key: RATE_LIMIT_WINDOW_MS
+        value: 900000
+      - key: RATE_LIMIT_MAX
+        value: 120
+      - key: AUTH_RATE_LIMIT_MAX
+        value: 20
+      - key: UPLOAD_RATE_LIMIT_MAX
+        value: 20
+      - key: CHAT_RATE_LIMIT_MAX
+        value: 60
+      - key: MAX_REQUEST_BODY_SIZE
+        value: 1mb
+      - key: MAX_FILE_SIZE_MB
+        value: 10
+      - key: MAX_UPLOAD_FILE_SIZE_BYTES
+        value: 10485760
+      - key: MAX_PAGES_PER_DOC
+        value: 40
+      - key: MAX_CHUNKS_PER_DOC
+        value: 200
+      - key: MAX_CONTEXT_CHUNKS
+        value: 4
+      - key: MAX_CHAT_REQUESTS_PER_DAY
+        value: 20
+      - key: MAX_DOCS_PER_USER
+        value: 3
+      - key: CACHE_TTL_SECONDS
+        value: 600
+      - key: CHUNK_SIZE_TOKENS
+        value: 450
+      - key: CHUNK_OVERLAP_TOKENS
+        value: 80
+      - key: GITHUB_REPOSITORY_URL
+        sync: false
+      - key: RUN_LOCALLY_GUIDE_URL
+        sync: false
+      - key: SAMPLE_DOC_PATH
+        value: sample_docs/system_design_primer.pdf
+      - key: ENABLE_SAMPLE_DOC_SEED
+        value: true

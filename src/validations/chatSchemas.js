@@ -1,27 +1,22 @@
 const { z } = require('zod');
 
-const chatBodySchema = z.object({
-    sessionId: z.union([z.string(), z.number()]).optional(),
-    message: z.string().min(1).max(10_000),
-    history: z.array(z.object({
-        role: z.enum(['user', 'assistant']),
-        text: z.string(),
-    })).max(100).optional(),
-    responseStyle: z.enum(['structured', 'plain']).optional(),
+const streamChatSchema = z.object({
+  sessionId: z.string().uuid().optional(),
+  documentId: z.string().uuid(),
+  query: z.string().min(1).max(4000),
 });
 
-const historyQuerySchema = z.object({
-    limit: z
-        .string()
-        .regex(/^\d+$/)
-        .optional(),
-    offset: z
-        .string()
-        .regex(/^\d+$/)
-        .optional(),
+const listSessionsQuerySchema = z.object({
+  documentId: z.string().uuid().optional(),
+  limit: z.coerce.number().int().positive().max(100).optional(),
+});
+
+const sessionIdParamsSchema = z.object({
+  sessionId: z.string().uuid(),
 });
 
 module.exports = {
-    chatBodySchema,
-    historyQuerySchema
+  streamChatSchema,
+  listSessionsQuerySchema,
+  sessionIdParamsSchema,
 };

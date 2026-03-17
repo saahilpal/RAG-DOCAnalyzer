@@ -1,0 +1,53 @@
+const path = require('path');
+const { supabase } = require('../config/supabase');
+const env = require('../config/env');
+const { AppError } = require('../utils/errors');
+
+function sanitizeFileName(fileName) {
+  const ext = path.extname(fileName || '').toLowerCase();
+  const baseName = path.basename(fileName || 'document', ext).replace(/[^a-zA-Z0-9-_]+/g, '_');
+  return `${baseName || 'document'}${ext || '.pdf'}`;
+}
+
+async function uploadDocumentBuffer({ userId, originalName, buffer, mimeType }) {
+  const safeName = sanitizeFileName(originalName);
+  const storagePath = `${userId}/${Date.now()}-${safeName}`;
+
+  const { error: uploadError } = await supabase.storage
+    .from(env.supabaseStorageBucket)
+    .upload(storagePath, buffer, {
+      contentType: mimeType || 'application/pdf',
+      upsert: false,
+    });
+
+  if (uploadError) {
+    throw new AppError(502, 'STORAGE_UPLOAD_FAILED', 'Failed to upload file to Supabase Storage.', {
+      message: uploadError.message,
+    });
+  }
+
+  const { data } = supabase.storage.from(env.supabaseStorageBucket).getPublicUrl(storagePath);
+
+  return {
+    storagePath,
+    fileUrl: data?.publicUrl || storagePath,
+  };
+}
+
+async function deleteDocumentObject(storagePath) {
+  if (!storagePath) {
+    return;
+  }
+
+  const { error } = await supabase.storage.from(env.supabaseStorageBucket).remove([storagePath]);
+  if (error) {
+    throw new AppError(502, 'STORAGE_DELETE_FAILED', 'Failed to delete file from Supabase Storage.', {
+      message: error.message,
+    });
+  }
+}
+
+module.exports = {
+  uploadDocumentBuffer,
+  deleteDocumentObject,
+};

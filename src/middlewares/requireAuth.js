@@ -1,0 +1,40 @@
+const jwt = require('jsonwebtoken');
+const env = require('../config/env');
+const { unauthorized } = require('../utils/errors');
+
+function extractToken(req) {
+  const cookieToken = req.cookies?.[env.authCookieName];
+  if (cookieToken) {
+    return cookieToken;
+  }
+
+  const authHeader = req.get('authorization');
+  if (authHeader && authHeader.toLowerCase().startsWith('bearer ')) {
+    return authHeader.slice(7).trim();
+  }
+
+  return null;
+}
+
+function requireAuth(req, res, next) {
+  try {
+    const token = extractToken(req);
+    if (!token) {
+      throw unauthorized('Authentication required.');
+    }
+
+    const payload = jwt.verify(token, env.jwtSecret);
+    req.auth = {
+      userId: payload.sub,
+      email: payload.email,
+    };
+
+    return next();
+  } catch (error) {
+    return next(unauthorized('Invalid or expired authentication token.'));
+  }
+}
+
+module.exports = {
+  requireAuth,
+};

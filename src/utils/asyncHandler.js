@@ -1,7 +1,9 @@
-function asyncHandler(handler) {
-  return function wrappedHandler(req, res, next) {
-    Promise.resolve(handler(req, res, next)).catch(next);
+function asyncHandler(fn) {
+  return function wrapped(req, res, next) {
+    Promise.resolve(fn(req, res, next)).catch(next);
   };
 }
 
-module.exports = asyncHandler;
+module.exports = {
+  asyncHandler,
+};

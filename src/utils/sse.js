@@ -1,31 +1,24 @@
 function initSse(res) {
-    res.status(200);
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache, no-transform');
-    res.setHeader('Connection', 'keep-alive');
-    res.setHeader('X-Accel-Buffering', 'no');
-    if (typeof res.flushHeaders === 'function') {
-        res.flushHeaders();
-    }
-    res.write('retry: 3000\n\n');
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
 }
 
-function writeSseEvent(res, event, payload) {
-    res.write(`event: ${event}\n`);
-    res.write(`data: ${JSON.stringify(payload)}\n\n`);
-    if (typeof res.flush === 'function') {
-        res.flush();
-    }
+function sendEvent(res, event, data) {
+  const serialized = typeof data === 'string' ? data : JSON.stringify(data);
+  res.write(`event: ${event}\n`);
+  res.write(`data: ${serialized}\n\n`);
 }
 
-function shouldStreamChat(req) {
-    const queryFlag = String(req.query.stream || '').toLowerCase() === 'true';
-    const acceptHeader = String(req.headers.accept || '').toLowerCase();
-    return queryFlag || acceptHeader.includes('text/event-stream');
+function endSse(res) {
+  res.write('event: end\n');
+  res.write('data: {}\n\n');
+  res.end();
 }
 
 module.exports = {
-    initSse,
-    writeSseEvent,
-    shouldStreamChat,
+  initSse,
+  sendEvent,
+  endSse,
 };
