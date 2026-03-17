@@ -45,8 +45,8 @@ const envSchema = z.object({
   CHUNK_SIZE_TOKENS: z.coerce.number().int().positive().default(450),
   CHUNK_OVERLAP_TOKENS: z.coerce.number().int().nonnegative().default(80),
 
-  GITHUB_REPOSITORY_URL: z.string().url().default('https://github.com/your-username/document-analyzer-rag'),
-  RUN_LOCALLY_GUIDE_URL: z.string().url().default('https://github.com/your-username/document-analyzer-rag#run-locally'),
+  GITHUB_REPOSITORY_URL: z.string().url().default('https://github.com/saahilpal/document-analyzer-rag-showcase'),
+  RUN_LOCALLY_GUIDE_URL: z.string().url().default('https://github.com/saahilpal/document-analyzer-rag-showcase#quick-start'),
 
   SAMPLE_DOC_PATH: z.string().default('sample_docs/system_design_primer.pdf'),
   ENABLE_SAMPLE_DOC_SEED: z
