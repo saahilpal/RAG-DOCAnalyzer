@@ -33,10 +33,8 @@ app.use(
       if (!origin) return callback(null, true);
 
       const isAllowed = allowedOrigins.some((allowedOrigin) => {
-        // exact match
         if (origin === allowedOrigin) return true;
 
-        // allow Vercel preview subdomains safely
         if (
           allowedOrigin.includes('vercel.app') &&
           origin.endsWith('.vercel.app')
@@ -47,15 +45,12 @@ app.use(
         return false;
       });
 
-      if (isAllowed) {
-        return callback(null, true);
-      }
-
-      return callback(new Error('Not allowed by CORS'));
+      return callback(null, isAllowed); // ✅ IMPORTANT FIX
     },
     credentials: true,
   }),
 );
+
 app.use(enforceOriginForMutations);
 
 app.use(
