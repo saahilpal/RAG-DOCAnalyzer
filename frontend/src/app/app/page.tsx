@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import { AlertCircle, FileUp, Trash2 } from 'lucide-react';
+import { AlertCircle, FileUp, Trash2, MessageSquare } from 'lucide-react';
 import { listMessages, streamChat, type ChatStreamEvent, type MessageRecord } from '@/lib/api';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
