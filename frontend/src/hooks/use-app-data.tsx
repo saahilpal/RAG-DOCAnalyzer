@@ -102,7 +102,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   }, [user]);
 
   const refreshSessions = useCallback(
-    async () => {
+    async (documentIdFilter?: string | null) => {
       if (!user) {
         setSessions([]);
         setActiveSessionId(null);
@@ -111,19 +111,14 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
 
       setLoadingSessions(true);
       try {
-        const data = await listSessions(); // Fetch all sessions
+        const data = await listSessions(documentIdFilter || undefined);
         setSessions(data.sessions);
 
         setActiveSessionId((current) => {
-          if (current === null) {
-            return null;
-          }
-
           if (current && data.sessions.some((session) => session.id === current)) {
             return current;
           }
-
-          return data.sessions[0]?.id || null;
+          return null;
         });
       } finally {
         setLoadingSessions(false);
@@ -184,11 +179,11 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   }, [refreshDocuments]);
 
   useEffect(() => {
-    refreshSessions().catch(() => {
+    refreshSessions(selectedDocumentId).catch(() => {
       setSessions([]);
       setActiveSessionId(null);
     });
-  }, [refreshSessions]);
+  }, [refreshSessions, selectedDocumentId]);
 
   useEffect(() => {
     refreshHealthAndLimits().catch(() => {
@@ -208,9 +203,10 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       await refreshDocuments();
       await refreshChatQuota();
       setSelectedDocumentId(uploaded.document.id);
-      setActiveSessionId(null);
+      setActiveSessionId(null); // New document starts with a fresh session
+      await refreshSessions(uploaded.document.id);
     },
-    [refreshChatQuota, refreshDocuments],
+    [refreshChatQuota, refreshDocuments, refreshSessions],
   );
 
   const removeDocument = useCallback(

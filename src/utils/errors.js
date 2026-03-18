@@ -32,6 +32,10 @@ function internal(message = 'Internal server error', details = null) {
   return new AppError(500, 'INTERNAL_ERROR', message, details);
 }
 
+function noDocumentContext(message = 'No document context provided.') {
+  return new AppError(400, 'NO_DOCUMENT_CONTEXT', message);
+}
+
 module.exports = {
   AppError,
   badRequest,
@@ -40,4 +44,5 @@ module.exports = {
   notFound,
   conflict,
   internal,
+  noDocumentContext,
 };

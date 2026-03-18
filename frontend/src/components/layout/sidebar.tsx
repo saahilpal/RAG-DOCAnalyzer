@@ -1,9 +1,8 @@
 'use client';
 
-import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Files, MessageSquare, Plus, Settings, Search, LogOut, X, Activity, Shield, Database, Zap } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { MessageSquare, Plus, Settings, Search, LogOut, X, Activity, Database } from 'lucide-react';
 import { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dropdown } from '@/components/ui/dropdown';
@@ -13,12 +12,7 @@ import { useAppData } from '@/hooks/use-app-data';
 import { cn } from '@/lib/cn';
 import { formatRelativeTime } from '@/lib/format';
 
-const navItems = [
-  { href: '/app', label: 'Chat', icon: MessageSquare },
-  { href: '/app/documents', label: 'Documents', icon: Files },
-];
 export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
-  const pathname = usePathname();
   const router = useRouter();
 
   const { user, signOutUser } = useAuth();
@@ -29,17 +23,23 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
     documents, 
     chatQuota,
     readyStatus,
-    loadingDocuments,
-    loadingSessions
+    selectedDocumentId,
+    setSelectedDocumentId
   } = useAppData();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   const filteredSessions = useMemo(() => {
-    if (!searchQuery.trim()) return sessions;
-    return sessions.filter(s => s.title.toLowerCase().includes(searchQuery.toLowerCase()));
-  }, [sessions, searchQuery]);
+    let result = sessions;
+    if (selectedDocumentId) {
+      result = result.filter(s => s.document_id === selectedDocumentId);
+    }
+    if (searchQuery.trim()) {
+      result = result.filter(s => s.title.toLowerCase().includes(searchQuery.toLowerCase()));
+    }
+    return result;
+  }, [sessions, searchQuery, selectedDocumentId]);
 
   const initials = user?.email.slice(0, 2).toUpperCase() || 'DA';
 
@@ -47,10 +47,11 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
     <>
       <aside className="flex h-full w-[86vw] max-w-[320px] flex-col border-r border-neutral-200 bg-white/90 px-4 py-5 backdrop-blur lg:w-[300px] lg:max-w-none">
         <div className="mb-6">
-          <LogoMark href="/" />
+          <LogoMark href="/app" />
         </div>
 
-        <div className="mb-4 space-y-3">
+        {/* TOP: New Chat & Search */}
+        <div className="mb-6 space-y-3">
           <Button
             className="w-full justify-start gap-2 shadow-sm"
             onClick={() => {
@@ -75,38 +76,15 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
           </div>
         </div>
 
-        <nav className="mb-6 space-y-1">
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            const active = pathname === item.href;
-
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={() => onNavigate?.()}
-                className={cn(
-                  'flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition',
-                  active
-                    ? 'bg-neutral-900 text-white'
-                    : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900',
-                )}
-              >
-                <Icon size={16} />
-                {item.label}
-              </Link>
-            );
-          })}
-        </nav>
-
+        {/* MIDDLE: Chat Sessions ONLY */}
         <div className="mb-2 flex items-center justify-between px-2">
-          <h3 className="text-[11px] font-bold uppercase tracking-wider text-neutral-400">Recent Sessions</h3>
+          <h3 className="text-[11px] font-bold uppercase tracking-wider text-neutral-400">Sessions</h3>
         </div>
 
         <div className="flex-1 space-y-1.5 overflow-y-auto pr-1">
           {filteredSessions.length === 0 ? (
             <p className="rounded-xl border border-dashed border-neutral-200 px-3 py-6 text-center text-xs text-neutral-400">
-              {searchQuery ? 'No matches found.' : 'No sessions yet.'}
+              {searchQuery ? 'No matches found.' : 'No sessions for this document.'}
             </p>
           ) : (
             filteredSessions.map((session) => (
@@ -117,6 +95,9 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                 type="button"
                 onClick={() => {
                   setActiveSessionId(session.id);
+                  if (session.document_id !== selectedDocumentId) {
+                    setSelectedDocumentId(session.document_id);
+                  }
                   router.push('/app');
                   onNavigate?.();
                 }}
@@ -141,6 +122,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
           )}
         </div>
 
+        {/* BOTTOM: Profile / Settings */}
         <div className="mt-4 border-t border-neutral-200 pt-4">
           <div className="group relative flex items-center justify-between rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2 transition-colors hover:bg-neutral-100">
             <div className="flex items-center gap-2 overflow-hidden">
@@ -149,17 +131,15 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
               </div>
               <div className="overflow-hidden">
                 <p className="truncate text-xs font-semibold text-neutral-800">{user?.email}</p>
-                <p className="text-[10px] text-neutral-500 uppercase font-bold tracking-tight">Personal Workspace</p>
+                <p className="text-[10px] text-neutral-500 uppercase font-bold tracking-tight">Active Workspace</p>
               </div>
             </div>
 
             <Dropdown
               items={[
                 {
-                  label: 'Settings',
-                  onSelect: () => {
-                    setIsSettingsOpen(true);
-                  },
+                  label: 'Workspace Settings',
+                  onSelect: () => setIsSettingsOpen(true),
                 },
                 {
                   type: 'separator',
@@ -179,13 +159,14 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         </div>
       </aside>
 
+      {/* Settings Overlay (Phase 6) */}
       {isSettingsOpen && (
           <div className="fixed inset-0 z-[100] flex justify-end bg-black/20 backdrop-blur-sm">
-            <div className="w-full max-w-md h-full bg-white shadow-2xl flex flex-col border-l border-neutral-200">
+            <div className="w-full max-w-md h-full bg-white shadow-2xl flex flex-col border-l border-neutral-200 overflow-hidden">
               <div className="flex items-center justify-between border-b border-neutral-100 px-6 py-5">
                 <h2 className="text-lg font-bold text-neutral-900 flex items-center gap-2">
                   <Settings size={20} className="text-neutral-500" />
-                  Workspace Settings
+                  Settings
                 </h2>
                 <button
                   onClick={() => setIsSettingsOpen(false)}
@@ -197,73 +178,60 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
 
               <div className="flex-1 overflow-y-auto p-6 space-y-8 bg-neutral-50/50">
                 <section>
-                  <h3 className="text-[10px] font-bold uppercase tracking-widest text-neutral-400 mb-3">Account</h3>
-                  <div className="flex items-center justify-between rounded-xl border border-neutral-200 bg-white p-4 shadow-sm">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-neutral-900 text-sm font-bold text-white">
-                        {initials}
-                      </div>
-                      <div>
-                        <p className="text-sm font-semibold text-neutral-900">{user?.email}</p>
-                        <p className="text-xs text-neutral-500">Free Tier</p>
-                      </div>
-                    </div>
-                  </div>
-                </section>
-
-                <section>
                   <h3 className="text-[10px] font-bold uppercase tracking-widest text-neutral-400 mb-3">Workspace Health</h3>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="rounded-xl border border-neutral-200 bg-white p-4 shadow-sm">
                       <div className="flex items-center gap-2 text-neutral-500 mb-2">
                         <Database size={16} />
-                        <span className="text-[10px] font-bold uppercase tracking-wider">Documents</span>
+                        <span className="text-[10px] font-bold uppercase tracking-wider">Docs</span>
                       </div>
                       <p className="text-2xl font-black text-neutral-900">{documents.length}</p>
                     </div>
                     <div className="rounded-xl border border-neutral-200 bg-white p-4 shadow-sm">
                       <div className="flex items-center gap-2 text-neutral-500 mb-2">
                         <MessageSquare size={16} />
-                        <span className="text-[10px] font-bold uppercase tracking-wider">Sessions</span>
+                        <span className="text-[10px] font-bold uppercase tracking-wider">Chats</span>
                       </div>
                       <p className="text-2xl font-black text-neutral-900">{sessions.length}</p>
-                    </div>
-                    <div className="col-span-2 rounded-xl border border-neutral-200 bg-white p-4 shadow-sm">
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2 text-neutral-500">
-                          <Activity size={16} />
-                          <span className="text-[10px] font-bold uppercase tracking-wider">Daily Quota</span>
-                        </div>
-                        <span className="text-xs font-medium text-neutral-500">
-                          {chatQuota ? `${chatQuota.remaining} requests remaining` : '...'}
-                        </span>
-                      </div>
-                      <div className="h-2 w-full overflow-hidden rounded-full bg-neutral-100">
-                        <div 
-                          className="h-full bg-neutral-900 transition-all duration-500" 
-                          style={{ width: chatQuota ? `${(chatQuota.used / chatQuota.limit) * 100}%` : '0%' }} 
-                        />
-                      </div>
                     </div>
                   </div>
                 </section>
 
                 <section>
-                  <h3 className="text-[10px] font-bold uppercase tracking-widest text-neutral-400 mb-3">System Status</h3>
-                  <div className="rounded-xl border border-neutral-200 bg-white p-4 shadow-sm space-y-4">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-neutral-700">Database Connection</span>
-                      <span className={cn("text-xs font-bold uppercase flex items-center gap-1.5", readyStatus.database ? "text-green-600" : "text-red-500")}>
-                        <div className={cn("h-1.5 w-1.5 rounded-full", readyStatus.database ? "bg-green-500" : "bg-red-500")} />
-                        {readyStatus.database ? 'Operational' : 'Offline'}
+                  <h3 className="text-[10px] font-bold uppercase tracking-widest text-neutral-400 mb-3">Daily Limits</h3>
+                  <div className="rounded-xl border border-neutral-200 bg-white p-4 shadow-sm">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2 text-neutral-500">
+                        <Activity size={16} />
+                        <span className="text-[10px] font-bold uppercase tracking-wider">Requests</span>
+                      </div>
+                      <span className="text-xs font-medium text-neutral-500">
+                        {chatQuota ? `${chatQuota.remaining} left` : '...'}
                       </span>
                     </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-neutral-700">AI Service (Gemini)</span>
-                      <span className={cn("text-xs font-bold uppercase flex items-center gap-1.5", readyStatus.ai ? "text-green-600" : "text-yellow-500")}>
-                        <div className={cn("h-1.5 w-1.5 rounded-full", readyStatus.ai ? "bg-green-500" : "bg-yellow-500")} />
-                        {readyStatus.ai ? 'Online' : 'Degraded'}
-                      </span>
+                    <div className="h-2 w-full overflow-hidden rounded-full bg-neutral-100">
+                      <div 
+                        className="h-full bg-neutral-900 transition-all duration-500" 
+                        style={{ width: chatQuota ? `${(chatQuota.used / chatQuota.limit) * 100}%` : '0%' }} 
+                      />
+                    </div>
+                  </div>
+                </section>
+
+                <section>
+                  <h3 className="text-[10px] font-bold uppercase tracking-widest text-neutral-400 mb-3">System</h3>
+                  <div className="rounded-xl border border-neutral-200 bg-white p-4 shadow-sm space-y-4">
+                    <div className="flex items-center justify-between text-sm">
+                       <span className="text-neutral-600">Database</span>
+                       <span className={cn("font-bold uppercase text-[10px]", readyStatus.database ? "text-green-600" : "text-red-500")}>
+                         {readyStatus.database ? 'Online' : 'Offline'}
+                       </span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                       <span className="text-neutral-600">AI Service</span>
+                       <span className={cn("font-bold uppercase text-[10px]", readyStatus.ai ? "text-green-600" : "text-yellow-500")}>
+                         {readyStatus.ai ? 'Online' : 'Degraded'}
+                       </span>
                     </div>
                   </div>
                 </section>
@@ -276,11 +244,10 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                   onClick={async () => {
                     await signOutUser();
                     router.push('/login');
-                    onNavigate?.();
                   }}
                 >
                   <LogOut size={16} className="mr-2" />
-                  Sign out of workspace
+                  Logout
                 </Button>
               </div>
             </div>

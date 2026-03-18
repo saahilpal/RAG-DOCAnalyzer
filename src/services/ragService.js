@@ -82,6 +82,7 @@ async function retrieveRelevantChunks({ userId, documentId, query }) {
   return retrieveFtsChunks({ userId, documentId, query });
 }
 
+
 function buildPrompt({ query, chunks }) {
   const chunkCharLimit = getPromptChunkCharLimit();
   const context =
@@ -94,21 +95,18 @@ function buildPrompt({ query, chunks }) {
           .join('\n\n')
       : 'No relevant context was retrieved from the document.';
 
-  return `SYSTEM:
-You are a document analysis assistant.
+  return `Answer only using the provided context. If context is insufficient, say that clearly.
 
 CONTEXT:
 ${context}
 
 USER QUESTION:
-${query}
-
-Answer only using the provided context. If context is insufficient, say that clearly.`;
+${query}`;
 }
 
 function buildFallbackAnswer({ query, chunks }) {
   if (chunks.length === 0) {
-    return `I could not find matching context for: "${query}". Upload or select a document with relevant content and try again.`;
+    return "I couldn’t find relevant info in this document.";
   }
 
   const snippetLimit = getFallbackSnippetLimit();
@@ -119,7 +117,7 @@ function buildFallbackAnswer({ query, chunks }) {
     })
     .join('\n');
 
-  return `AI response is temporarily unavailable in this demo environment, so here are the most relevant extracted passages:\n${bulletPoints}`;
+  return `I am having trouble generating a complete answer, but here is the most relevant information I found:\n\n${bulletPoints}`;
 }
 
 async function streamTextAsChunks(answer, onToken) {

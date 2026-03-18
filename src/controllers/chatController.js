@@ -15,10 +15,15 @@ const {
   getRemainingChatRequests,
   getTodayChatUsage,
 } = require('../services/quotaService');
+const { noDocumentContext } = require('../utils/errors');
 
 async function stream(req, res, next) {
   const userId = req.auth.userId;
   const { sessionId, documentId, query } = req.body;
+
+  if (!documentId) {
+    return next(noDocumentContext());
+  }
 
   let streamStarted = false;
   let quotaConsumed = false;

@@ -131,41 +131,9 @@ export default function DashboardChatPage() {
       return;
     }
 
+    // Phase 7: Safety & Validation
     if (!selectedDocumentId) {
-      const assistantGreeting: MessageRecord = {
-        id: `temp-assistant-${Date.now()}`,
-        session_id: 'no-doc',
-        role: 'assistant',
-        content: "Hey 👋 Please upload a document first so I can help you.",
-        created_at: new Date().toISOString(),
-      };
-      setMessages((prev) => [...prev, {
-        id: `temp-user-${Date.now()}`,
-        session_id: 'no-doc',
-        role: 'user',
-        content: currentQuery,
-        created_at: new Date().toISOString()
-      }, assistantGreeting]);
-      setQuery('');
-      return;
-    }
-
-    if (currentQuery.length < 10 && ['explain', 'summary', 'help', 'what', 'who', 'why', 'how', 'tell me', 'can you'].some(w => currentQuery.toLowerCase().includes(w))) {
-      const assistantGreeting: MessageRecord = {
-        id: `temp-assistant-${Date.now()}`,
-        session_id: 'vague',
-        role: 'assistant',
-        content: "Try asking more specifically about the document.",
-        created_at: new Date().toISOString(),
-      };
-      setMessages((prev) => [...prev, {
-        id: `temp-user-${Date.now()}`,
-        session_id: 'vague',
-        role: 'user',
-        content: currentQuery,
-        created_at: new Date().toISOString()
-      }, assistantGreeting]);
-      setQuery('');
+      setError('Please upload or select a document first.');
       return;
     }
 
@@ -245,7 +213,7 @@ export default function DashboardChatPage() {
               aiErrorCode: event.data.ai_error_code || null,
             });
 
-            await refreshSessions(); // Fix: Call without selectedDocumentId since we changed it to global
+            await refreshSessions(selectedDocumentId); 
             await refreshChatQuota();
 
             if (resolvedSessionId) {

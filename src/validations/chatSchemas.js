@@ -2,7 +2,7 @@ const { z } = require('zod');
 
 const streamChatSchema = z.object({
   sessionId: z.string().uuid().optional(),
-  documentId: z.string().uuid(),
+  documentId: z.string().uuid({ message: 'Valid documentId is required.' }),
   query: z.string().min(1).max(4000),
 });
 
