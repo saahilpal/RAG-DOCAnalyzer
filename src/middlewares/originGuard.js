@@ -32,9 +32,22 @@ function enforceOriginForMutations(req, res, next) {
     return next();
   }
 
-  if (!allowedOrigins.includes(requestOrigin)) {
-    return fail(res, 403, 'ORIGIN_NOT_ALLOWED', 'Request origin is not allowed for this environment.');
+  const isAllowed = allowedOrigins.some((allowedOrigin) => {
+  if (requestOrigin === allowedOrigin) return true;
+
+  if (
+    allowedOrigin.includes('vercel.app') &&
+    requestOrigin.endsWith('.vercel.app')
+  ) {
+    return true;
   }
+
+  return false;
+});
+
+if (!isAllowed) {
+  return fail(res, 403, 'ORIGIN_NOT_ALLOWED', 'Request origin is not allowed for this environment.');
+}
 
   return next();
 }
