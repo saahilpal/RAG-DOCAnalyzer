@@ -6,11 +6,17 @@ import { MoreHorizontal } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { transitions } from '@/lib/motion';
 
-type DropdownItem = {
-  label: string;
-  onSelect: () => void;
-  destructive?: boolean;
-};
+export type DropdownItem = 
+  | {
+      type?: 'item';
+      label: string;
+      onSelect?: () => void;
+      destructive?: boolean;
+      disabled?: boolean;
+    }
+  | {
+      type: 'separator';
+    };
 
 type DropdownProps = {
   items: DropdownItem[];
@@ -56,26 +62,38 @@ export function Dropdown({ items, align = 'right' }: DropdownProps) {
             exit={{ opacity: 0, y: 2 }}
             transition={transitions.dropdown}
             className={cn(
-              'absolute z-30 mt-2 min-w-40 rounded-xl border border-neutral-200 bg-white py-1 shadow-xl',
+              'absolute z-30 mt-2 min-w-48 rounded-xl border border-neutral-200 bg-white py-1 shadow-xl',
               align === 'right' ? 'right-0' : 'left-0',
             )}
           >
-            {items.map((item) => (
-              <button
-                key={item.label}
-                type="button"
-                className={cn(
-                  'flex w-full items-center px-3 py-2 text-left text-sm text-neutral-700 transition hover:bg-neutral-100',
-                  item.destructive && 'text-neutral-900',
-                )}
-                onClick={() => {
-                  item.onSelect();
-                  setOpen(false);
-                }}
-              >
-                {item.label}
-              </button>
-            ))}
+            {items.map((item, index) => {
+              if (item.type === 'separator') {
+                return <div key={`sep-${index}`} className="my-1 border-t border-neutral-100" />;
+              }
+
+              return (
+                <button
+                  key={item.label}
+                  type="button"
+                  disabled={item.disabled}
+                  className={cn(
+                    'flex w-full items-center px-3 py-2 text-left text-sm transition',
+                    item.disabled 
+                      ? 'cursor-default opacity-60 text-neutral-500 font-medium' 
+                      : 'text-neutral-700 hover:bg-neutral-100',
+                    item.destructive && !item.disabled && 'text-red-600',
+                  )}
+                  onClick={() => {
+                    if (item.onSelect) {
+                      item.onSelect();
+                      setOpen(false);
+                    }
+                  }}
+                >
+                  {item.label}
+                </button>
+              );
+            })}
           </motion.div>
         ) : null}
       </AnimatePresence>
