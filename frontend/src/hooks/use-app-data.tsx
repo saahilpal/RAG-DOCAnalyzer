@@ -93,8 +93,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         if (current && data.documents.some((document) => document.id === current)) {
           return current;
         }
-
-        return data.documents[0]?.id || null;
+        return null;
       });
     } finally {
       setLoadingDocuments(false);
@@ -179,6 +178,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   }, [refreshDocuments]);
 
   useEffect(() => {
+    // Only refresh sessions for the specifically selected document if one exists
     refreshSessions(selectedDocumentId).catch(() => {
       setSessions([]);
       setActiveSessionId(null);

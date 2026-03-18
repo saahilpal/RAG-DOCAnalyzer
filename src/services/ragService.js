@@ -106,7 +106,7 @@ ${query}`;
 
 function buildFallbackAnswer({ query, chunks }) {
   if (chunks.length === 0) {
-    return "I couldn’t find relevant info in this document.";
+    return "No relevant content found in this document";
   }
 
   const snippetLimit = getFallbackSnippetLimit();

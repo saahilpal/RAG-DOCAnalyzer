@@ -31,15 +31,9 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   const filteredSessions = useMemo(() => {
-    let result = sessions;
-    if (selectedDocumentId) {
-      result = result.filter(s => s.document_id === selectedDocumentId);
-    }
-    if (searchQuery.trim()) {
-      result = result.filter(s => s.title.toLowerCase().includes(searchQuery.toLowerCase()));
-    }
-    return result;
-  }, [sessions, searchQuery, selectedDocumentId]);
+    if (!searchQuery.trim()) return sessions;
+    return sessions.filter(s => s.title.toLowerCase().includes(searchQuery.toLowerCase()));
+  }, [sessions, searchQuery]);
 
   const initials = user?.email.slice(0, 2).toUpperCase() || 'DA';
 
@@ -123,7 +117,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         </div>
 
         {/* BOTTOM: Profile / Settings */}
-        <div className="mt-4 border-t border-neutral-200 pt-4">
+        <div className="mt-auto border-t border-neutral-200 pt-4">
           <div className="group relative flex items-center justify-between rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2 transition-colors hover:bg-neutral-100">
             <div className="flex items-center gap-2 overflow-hidden">
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-neutral-900 text-xs font-semibold text-white">

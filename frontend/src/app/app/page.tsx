@@ -131,9 +131,23 @@ export default function DashboardChatPage() {
       return;
     }
 
-    // Phase 7: Safety & Validation
+    // Step 2 & 3: Fix Chat Behavior & API Integration
     if (!selectedDocumentId) {
-      setError('Please upload or select a document first.');
+      const assistantGreeting: MessageRecord = {
+        id: `temp-assistant-${Date.now()}`,
+        session_id: 'no-doc',
+        role: 'assistant',
+        content: "Hey 👋 Please upload a document first so I can help you.",
+        created_at: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, {
+        id: `temp-user-${Date.now()}`,
+        session_id: 'no-doc',
+        role: 'user',
+        content: currentQuery,
+        created_at: new Date().toISOString()
+      }, assistantGreeting]);
+      setQuery('');
       return;
     }
 
@@ -200,7 +214,7 @@ export default function DashboardChatPage() {
                   message.id === assistantMessage.id
                     ? {
                         ...message,
-                        content: "I couldn’t find relevant information in your document.",
+                        content: "No relevant content found in this document",
                       }
                     : message,
                 ),
@@ -307,10 +321,10 @@ export default function DashboardChatPage() {
                     <MessageSquare className="h-10 w-10 text-neutral-500" />
                   </div>
                   <h2 className="text-2xl font-semibold text-neutral-900 mb-2">
-                    Hi 👋 Upload a document and ask anything about it.
+                    Upload a document to start
                   </h2>
                   <p className="mb-8 text-sm text-neutral-500">
-                    Get started by uploading a PDF document. Your sessions are securely bound to the context you provide.
+                    Get started by uploading a PDF document. Your sessions are securely bound to the document context.
                   </p>
                   
                   <div className="w-full relative shadow-sm rounded-2xl">
@@ -379,71 +393,8 @@ export default function DashboardChatPage() {
           )}
         </div>
 
-        {/* Sidebar Info - Desktop */}
-        <motion.aside
-          initial={{ opacity: 0, x: 8 }}
-          animate={{ opacity: 1, x: 0 }}
-          className="hidden space-y-4 xl:block"
-        >
-          {selectedDocument && (
-            <Card className="p-5">
-              <h2 className="text-xs font-bold uppercase tracking-widest text-neutral-400">Context Source</h2>
-              <div className="mt-4 space-y-3">
-                <p className="text-sm font-bold text-neutral-900 truncate" title={selectedDocument.file_name}>
-                  {selectedDocument.file_name}
-                </p>
-                <div className="space-y-1.5 text-xs text-neutral-500">
-                  <p>Uploaded: {formatDate(selectedDocument.created_at)}</p>
-                  <p>Status: <span className="text-green-600 font-semibold">{selectedDocument.indexing_status}</span></p>
-                </div>
-                
-                <div className="pt-2">
-                   <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-400 mb-2">Preview</p>
-                   <p className="rounded-xl bg-neutral-50 p-3 text-xs leading-relaxed text-neutral-600 border border-neutral-100 italic">
-                    &quot;{previewText}&quot;
-                  </p>
-                </div>
-
-                <div className="flex gap-2 pt-2">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="flex-1 text-red-600 hover:bg-red-50 hover:text-red-700"
-                    onClick={() => setConfirmDeleteOpen(true)}
-                  >
-                    <Trash2 size={14} />
-                    Delete
-                  </Button>
-                </div>
-              </div>
-            </Card>
-          )}
-
-          <Card className="p-5">
-            <h3 className="text-xs font-bold uppercase tracking-widest text-neutral-400">Workspace</h3>
-            <div className="mt-4 space-y-4">
-              <div className="space-y-2">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-neutral-500">Retrieval Mode</span>
-                  <span className="font-bold text-neutral-900 uppercase tracking-tighter">{retrievalMode}</span>
-                </div>
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-neutral-500">Health</span>
-                  <span className="flex items-center gap-1.5 font-bold text-green-600">
-                    <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
-                    Optimal
-                  </span>
-                </div>
-              </div>
-              
-              <div className="rounded-xl bg-neutral-50 p-3 border border-neutral-100">
-                <p className="text-[10px] text-neutral-400 leading-tight">
-                  {demoMessage}
-                </p>
-              </div>
-            </div>
-          </Card>
-        </motion.aside>
+        {/* Sidebar Info - Desktop (Removed for recovery cleanliness) */}
+        {/* <motion.aside ... /> */}
 
         <input
           ref={fileInputRef}
