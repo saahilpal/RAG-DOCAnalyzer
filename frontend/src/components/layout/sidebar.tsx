@@ -192,5 +192,3 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
     </aside>
   );
 }
-  );
-}
