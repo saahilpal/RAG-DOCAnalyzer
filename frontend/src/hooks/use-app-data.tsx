@@ -102,10 +102,8 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   }, [user]);
 
   const refreshSessions = useCallback(
-    async (documentId?: string | null) => {
-      const targetDocumentId = documentId ?? selectedDocumentId;
-
-      if (!user || !targetDocumentId) {
+    async () => {
+      if (!user) {
         setSessions([]);
         setActiveSessionId(null);
         return;
@@ -113,7 +111,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
 
       setLoadingSessions(true);
       try {
-        const data = await listSessions(targetDocumentId);
+        const data = await listSessions(); // Fetch all sessions
         setSessions(data.sessions);
 
         setActiveSessionId((current) => {
@@ -131,7 +129,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         setLoadingSessions(false);
       }
     },
-    [selectedDocumentId, user],
+    [user],
   );
 
   const refreshHealthAndLimits = useCallback(async () => {
@@ -190,7 +188,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       setSessions([]);
       setActiveSessionId(null);
     });
-  }, [refreshSessions, selectedDocumentId]);
+  }, [refreshSessions]);
 
   useEffect(() => {
     refreshHealthAndLimits().catch(() => {

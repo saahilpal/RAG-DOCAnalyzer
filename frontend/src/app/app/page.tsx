@@ -13,6 +13,7 @@ import { ChatInput } from '@/components/chat/chat-input';
 import { TypingIndicator } from '@/components/chat/typing-indicator';
 import { useAppData } from '@/hooks/use-app-data';
 import { formatDate } from '@/lib/format';
+import { cn } from '@/lib/cn';
 import { PageTransition } from '@/components/common/page-transition';
 
 function statusFromDocument(indexingStatus: 'processing' | 'indexed' | 'error') {
@@ -98,6 +99,14 @@ export default function DashboardChatPage() {
   }, [activeSession?.last_message, messages, selectedDocument?.text_preview]);
 
   useEffect(() => {
+    if (activeSession) {
+      if (activeSession.document_id !== selectedDocumentId) {
+        setSelectedDocumentId(activeSession.document_id);
+      }
+    }
+  }, [activeSession, selectedDocumentId, setSelectedDocumentId]);
+
+  useEffect(() => {
     if (!activeSessionId) {
       setMessages([]);
       return;
@@ -125,14 +134,33 @@ export default function DashboardChatPage() {
     if (!selectedDocumentId) {
       const assistantGreeting: MessageRecord = {
         id: `temp-assistant-${Date.now()}`,
-        session_id: 'greeting',
+        session_id: 'no-doc',
         role: 'assistant',
-        content: "Hey 👋 Upload a document to get started. I’ll help you understand it.",
+        content: "Hey 👋 Please upload a document first so I can help you.",
         created_at: new Date().toISOString(),
       };
       setMessages((prev) => [...prev, {
         id: `temp-user-${Date.now()}`,
-        session_id: 'greeting',
+        session_id: 'no-doc',
+        role: 'user',
+        content: currentQuery,
+        created_at: new Date().toISOString()
+      }, assistantGreeting]);
+      setQuery('');
+      return;
+    }
+
+    if (currentQuery.length < 10 && ['explain', 'summary', 'help', 'what', 'who', 'why', 'how', 'tell me', 'can you'].some(w => currentQuery.toLowerCase().includes(w))) {
+      const assistantGreeting: MessageRecord = {
+        id: `temp-assistant-${Date.now()}`,
+        session_id: 'vague',
+        role: 'assistant',
+        content: "Try asking more specifically about the document.",
+        created_at: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, {
+        id: `temp-user-${Date.now()}`,
+        session_id: 'vague',
         role: 'user',
         content: currentQuery,
         created_at: new Date().toISOString()
@@ -198,14 +226,13 @@ export default function DashboardChatPage() {
           }
 
           if (event.type === 'done') {
-            // Handle cases where no relevant context was found or empty response
             if (!hasReceivedTokens) {
                setMessages((previous) =>
                 previous.map((message) =>
                   message.id === assistantMessage.id
                     ? {
                         ...message,
-                        content: "I couldn’t find relevant information in your document for that question. Try asking more specifically about the document content.",
+                        content: "I couldn’t find relevant information in your document.",
                       }
                     : message,
                 ),
@@ -218,7 +245,7 @@ export default function DashboardChatPage() {
               aiErrorCode: event.data.ai_error_code || null,
             });
 
-            await refreshSessions(selectedDocumentId);
+            await refreshSessions(); // Fix: Call without selectedDocumentId since we changed it to global
             await refreshChatQuota();
 
             if (resolvedSessionId) {
@@ -228,9 +255,12 @@ export default function DashboardChatPage() {
           }
         },
       );
-    } catch (streamError: any) {
-      setError(streamError.message || 'Something went wrong. Please try again.');
-      // Cleanup the empty assistant message on error
+    } catch (streamError) {
+      if (streamError instanceof Error) {
+        setError(streamError.message || 'Something went wrong. Please try again.');
+      } else {
+        setError('Something went wrong. Please try again.');
+      }
       setMessages((prev) => prev.filter(m => m.id !== assistantMessage.id));
     } finally {
       setStreaming(false);
@@ -244,6 +274,16 @@ export default function DashboardChatPage() {
 
     try {
       await uploadDocumentFile(file, (progress) => setUploadProgress(progress));
+      
+      const successMessage: MessageRecord = {
+        id: `temp-assistant-${Date.now()}`,
+        session_id: activeSessionId || 'pending',
+        role: 'assistant',
+        content: "✅ Document uploaded successfully. You can now ask questions.",
+        created_at: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, successMessage]);
+
     } catch (uploadError) {
       if (uploadError instanceof Error) {
         setError(uploadError.message);
@@ -291,57 +331,84 @@ export default function DashboardChatPage() {
           </div>
 
           {/* Messages Area */}
-          <div className="flex-1 overflow-y-auto bg-neutral-50/50 px-4 py-6 sm:px-8">
-            <div className="mx-auto max-w-3xl space-y-6">
+          <div className={cn("flex-1 overflow-y-auto px-4 sm:px-8", messages.length === 0 ? "flex items-center justify-center bg-white" : "bg-neutral-50/50 py-6")}>
+            <div className="mx-auto w-full max-w-3xl space-y-6">
               {messages.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-20 text-center">
-                  <div className="mb-4 rounded-full bg-neutral-100 p-4">
-                    <MessageSquare className="h-8 w-8 text-neutral-400" />
+                <div className="flex flex-col items-center justify-center w-full max-w-2xl mx-auto text-center">
+                  <div className="mb-6 rounded-2xl bg-neutral-100 p-5">
+                    <MessageSquare className="h-10 w-10 text-neutral-500" />
                   </div>
-                  <h2 className="text-xl font-semibold text-neutral-900">
-                    {selectedDocument ? `Chat with ${selectedDocument.file_name}` : 'Ready to start?'}
+                  <h2 className="text-2xl font-semibold text-neutral-900 mb-2">
+                    Hi 👋 Upload a document and ask anything about it.
                   </h2>
-                  <p className="mt-2 text-sm text-neutral-500 max-w-xs">
-                    {selectedDocument 
-                      ? "Ask anything about this document's content. AI will answer based on indexed chunks." 
-                      : "Upload or select a document to begin your research session."}
+                  <p className="mb-8 text-sm text-neutral-500">
+                    Get started by uploading a PDF document. Your sessions are securely bound to the context you provide.
                   </p>
+                  
+                  <div className="w-full relative shadow-sm rounded-2xl">
+                    <ChatInput
+                      value={query}
+                      disabled={streaming || Boolean(chatQuota && chatQuota.remaining <= 0)}
+                      loading={streaming}
+                      maxLength={4000}
+                      onChange={setQuery}
+                      onSubmit={onSendMessage}
+                      onUploadClick={() => fileInputRef.current?.click()}
+                    />
+                    {error && (
+                      <p className="absolute -bottom-6 left-0 right-0 text-center text-xs font-medium text-red-500">
+                        {error}
+                      </p>
+                    )}
+                  </div>
+                  
+                  {uploading && (
+                    <div className="mt-8 w-full max-w-md">
+                      <div className="h-2 overflow-hidden rounded-full bg-neutral-200">
+                        <div className="h-full bg-neutral-900 transition-all" style={{ width: `${uploadProgress}%` }} />
+                      </div>
+                      <p className="mt-2 text-xs text-neutral-500 font-medium">{uploadProgress}% uploading...</p>
+                    </div>
+                  )}
                 </div>
               ) : (
-                messages.map((message) => (
-                  <ChatBubble
-                    key={message.id}
-                    role={message.role}
-                    content={message.content}
-                    timestamp={message.created_at}
-                  />
-                ))
+                <>
+                  {messages.map((message) => (
+                    <ChatBubble
+                      key={message.id}
+                      role={message.role}
+                      content={message.content}
+                      timestamp={message.created_at}
+                    />
+                  ))}
+                  {streaming ? <TypingIndicator /> : null}
+                  <div ref={messagesBottomRef} className="h-4" />
+                </>
               )}
-
-              {streaming ? <TypingIndicator /> : null}
-              <div ref={messagesBottomRef} className="h-4" />
             </div>
           </div>
 
           {/* Input Area */}
-          <div className="border-t border-neutral-200 bg-white px-4 py-4 sm:px-8 md:pb-6">
-            <div className="mx-auto max-w-3xl">
-              <ChatInput
-                value={query}
-                disabled={streaming || Boolean(chatQuota && chatQuota.remaining <= 0)}
-                loading={streaming}
-                maxLength={4000}
-                onChange={setQuery}
-                onSubmit={onSendMessage}
-                onUploadClick={() => fileInputRef.current?.click()}
-              />
-              {error && (
-                <p className="mt-2 text-center text-xs font-medium text-red-500 animate-in fade-in slide-in-from-bottom-1">
-                  {error}
-                </p>
-              )}
+          {messages.length > 0 && (
+            <div className="border-t border-neutral-200 bg-white px-4 py-4 sm:px-8 md:pb-6">
+              <div className="mx-auto max-w-3xl">
+                <ChatInput
+                  value={query}
+                  disabled={streaming || Boolean(chatQuota && chatQuota.remaining <= 0)}
+                  loading={streaming}
+                  maxLength={4000}
+                  onChange={setQuery}
+                  onSubmit={onSendMessage}
+                  onUploadClick={() => fileInputRef.current?.click()}
+                />
+                {error && (
+                  <p className="mt-2 text-center text-xs font-medium text-red-500 animate-in fade-in slide-in-from-bottom-1">
+                    {error}
+                  </p>
+                )}
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         {/* Sidebar Info - Desktop */}
@@ -365,7 +432,7 @@ export default function DashboardChatPage() {
                 <div className="pt-2">
                    <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-400 mb-2">Preview</p>
                    <p className="rounded-xl bg-neutral-50 p-3 text-xs leading-relaxed text-neutral-600 border border-neutral-100 italic">
-                    "{previewText}"
+                    &quot;{previewText}&quot;
                   </p>
                 </div>
 

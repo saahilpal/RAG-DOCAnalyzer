@@ -49,8 +49,7 @@ export default function DocumentsPage() {
   }
 
   return (
-    <PageTransition>
-      <div className="mx-auto min-h-full max-w-6xl space-y-4 md:space-y-5">
+    <div className="mx-auto min-h-full max-w-6xl space-y-4 md:space-y-5">
         <header className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight text-neutral-900">Document Manager</h1>
@@ -114,6 +113,5 @@ export default function DocumentsPage() {
           }}
         />
       </div>
-    </PageTransition>
   );
 }
