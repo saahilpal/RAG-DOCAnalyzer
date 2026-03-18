@@ -30,15 +30,32 @@ app.use(
 app.use(
   cors({
     origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes(origin)) {
+      if (!origin) return callback(null, true);
+
+      const isAllowed = allowedOrigins.some((allowedOrigin) => {
+        // exact match
+        if (origin === allowedOrigin) return true;
+
+        // allow Vercel preview subdomains safely
+        if (
+          allowedOrigin.includes('vercel.app') &&
+          origin.endsWith('.vercel.app')
+        ) {
+          return true;
+        }
+
+        return false;
+      });
+
+      if (isAllowed) {
         return callback(null, true);
       }
-      return callback(null, false);
+
+      return callback(new Error('Not allowed by CORS'));
     },
     credentials: true,
   }),
 );
-
 app.use(enforceOriginForMutations);
 
 app.use(
