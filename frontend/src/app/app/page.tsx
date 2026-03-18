@@ -117,11 +117,30 @@ export default function DashboardChatPage() {
   }, [messages, streaming]);
 
   async function onSendMessage() {
-    if (!selectedDocumentId || !query.trim() || streaming) {
+    const currentQuery = query.trim();
+    if (!currentQuery || streaming) {
       return;
     }
 
-    const currentQuery = query.trim();
+    if (!selectedDocumentId) {
+      const assistantGreeting: MessageRecord = {
+        id: `temp-assistant-${Date.now()}`,
+        session_id: 'greeting',
+        role: 'assistant',
+        content: "Hey 👋 Upload a document to get started. I’ll help you understand it.",
+        created_at: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, {
+        id: `temp-user-${Date.now()}`,
+        session_id: 'greeting',
+        role: 'user',
+        content: currentQuery,
+        created_at: new Date().toISOString()
+      }, assistantGreeting]);
+      setQuery('');
+      return;
+    }
+
     setQuery('');
     setError('');
     setStreaming(true);
@@ -147,6 +166,7 @@ export default function DashboardChatPage() {
     setMessages((previous) => [...previous, userMessage, assistantMessage]);
 
     let resolvedSessionId = activeSessionId || undefined;
+    let hasReceivedTokens = false;
 
     try {
       await streamChat(
@@ -163,6 +183,7 @@ export default function DashboardChatPage() {
           }
 
           if (event.type === 'token') {
+            hasReceivedTokens = true;
             setMessages((previous) =>
               previous.map((message) =>
                 message.id === assistantMessage.id
@@ -177,6 +198,20 @@ export default function DashboardChatPage() {
           }
 
           if (event.type === 'done') {
+            // Handle cases where no relevant context was found or empty response
+            if (!hasReceivedTokens) {
+               setMessages((previous) =>
+                previous.map((message) =>
+                  message.id === assistantMessage.id
+                    ? {
+                        ...message,
+                        content: "I couldn’t find relevant information in your document for that question. Try asking more specifically about the document content.",
+                      }
+                    : message,
+                ),
+              );
+            }
+
             setResponseMeta({
               fallbackUsed: Boolean(event.data.fallback_used),
               cached: Boolean(event.data.cached),
@@ -193,12 +228,10 @@ export default function DashboardChatPage() {
           }
         },
       );
-    } catch (streamError) {
-      if (streamError instanceof Error) {
-        setError(streamError.message);
-      } else {
-        setError('Failed to stream response.');
-      }
+    } catch (streamError: any) {
+      setError(streamError.message || 'Something went wrong. Please try again.');
+      // Cleanup the empty assistant message on error
+      setMessages((prev) => prev.filter(m => m.id !== assistantMessage.id));
     } finally {
       setStreaming(false);
     }
@@ -224,214 +257,188 @@ export default function DashboardChatPage() {
 
   return (
     <PageTransition>
-      <div className="grid min-h-full gap-3 md:gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
-        <Card className="flex min-h-0 flex-col overflow-hidden">
-          <div className="border-b border-neutral-200 px-4 py-4 sm:px-5">
-            <div className="mb-3 rounded-xl border border-neutral-200 bg-neutral-100 px-3 py-2 text-xs text-neutral-700">
-              {demoMessage}{' '}
-              {demoLimits ? (
-                <span className="font-medium">
-                  {demoLimits.maxFileSizeMb}MB max file • {demoLimits.maxChatRequestsPerDay} questions/day •{' '}
-                  {demoLimits.maxDocsPerUser} docs/user
-                </span>
-              ) : null}
-            </div>
-
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h1 className="text-xl font-semibold tracking-tight text-neutral-900">Workspace Chat</h1>
-                <p className="mt-1 text-sm text-neutral-600">Upload document → Ask AI questions → Get answers.</p>
-              </div>
-
-              <div className="flex w-full items-center gap-2 sm:w-auto sm:min-w-[220px]">
-                <select
-                  value={selectedDocumentId || ''}
-                  onChange={(event) => {
-                    setSelectedDocumentId(event.target.value || null);
-                    setActiveSessionId(null);
-                    setMessages([]);
-                  }}
-                  className="h-10 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm text-neutral-800 outline-none focus:border-neutral-400 focus:ring-2 focus:ring-neutral-200"
-                >
-                  {documents.length === 0 ? <option value="">No documents</option> : null}
-                  {documents.map((document) => (
-                    <option key={document.id} value={document.id}>
-                      {document.file_name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
-              <Badge tone="muted">Mode: {retrievalMode || 'fts'}</Badge>
-              {chatQuota ? (
-                <Badge tone="muted">
-                  Daily usage: {chatQuota.used}/{chatQuota.limit}
+      <div className="flex h-[calc(100vh-80px)] lg:h-[calc(100vh-48px)] flex-col xl:grid xl:grid-cols-[minmax(0,1fr)_300px] xl:gap-4">
+        <div className="flex flex-col min-h-0 min-w-0 flex-1 overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm">
+          {/* Mobile Header / Quick Select */}
+          <div className="flex items-center justify-between border-b border-neutral-200 bg-neutral-50 px-4 py-3 sm:px-5">
+            <div className="flex min-w-0 items-center gap-3">
+              <h1 className="truncate text-sm font-bold tracking-tight text-neutral-900">
+                {selectedDocument ? selectedDocument.file_name : 'Select Document'}
+              </h1>
+              {selectedDocument && (
+                <Badge tone="muted" className="shrink-0 text-[10px]">
+                  {selectedDocument.page_count}p • {selectedDocument.chunk_count}c
                 </Badge>
-              ) : null}
+              )}
             </div>
 
-            {responseMeta?.fallbackUsed ? (
-              <div className="mt-3 flex items-start gap-2 rounded-lg border border-neutral-200 bg-neutral-100 px-3 py-2 text-sm text-neutral-700">
-                <AlertCircle size={16} className="mt-0.5" />
-                <div>
-                  Fallback response used due to AI limits.
-                  {responseMeta.aiErrorCode ? (
-                    <span className="ml-1 font-medium">({responseMeta.aiErrorCode})</span>
-                  ) : null}
+            <select
+              value={selectedDocumentId || ''}
+              onChange={(event) => {
+                setSelectedDocumentId(event.target.value || null);
+                setActiveSessionId(null);
+                setMessages([]);
+              }}
+              className="h-8 w-40 rounded-lg border border-neutral-200 bg-white px-2 text-xs text-neutral-800 outline-none focus:border-neutral-400 sm:w-56"
+            >
+              <option value="">Choose document...</option>
+              {documents.map((document) => (
+                <option key={document.id} value={document.id}>
+                  {document.file_name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Messages Area */}
+          <div className="flex-1 overflow-y-auto bg-neutral-50/50 px-4 py-6 sm:px-8">
+            <div className="mx-auto max-w-3xl space-y-6">
+              {messages.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-20 text-center">
+                  <div className="mb-4 rounded-full bg-neutral-100 p-4">
+                    <MessageSquare className="h-8 w-8 text-neutral-400" />
+                  </div>
+                  <h2 className="text-xl font-semibold text-neutral-900">
+                    {selectedDocument ? `Chat with ${selectedDocument.file_name}` : 'Ready to start?'}
+                  </h2>
+                  <p className="mt-2 text-sm text-neutral-500 max-w-xs">
+                    {selectedDocument 
+                      ? "Ask anything about this document's content. AI will answer based on indexed chunks." 
+                      : "Upload or select a document to begin your research session."}
+                  </p>
                 </div>
-              </div>
-            ) : null}
+              ) : (
+                messages.map((message) => (
+                  <ChatBubble
+                    key={message.id}
+                    role={message.role}
+                    content={message.content}
+                    timestamp={message.created_at}
+                  />
+                ))
+              )}
 
-            {error ? <p className="mt-3 rounded-lg bg-neutral-100 px-3 py-2 text-sm text-neutral-700">{error}</p> : null}
+              {streaming ? <TypingIndicator /> : null}
+              <div ref={messagesBottomRef} className="h-4" />
+            </div>
           </div>
 
-          <div className="flex-1 space-y-4 overflow-y-auto bg-neutral-50 px-4 py-5 sm:px-5">
-            {messages.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-neutral-300 bg-white px-6 py-8 text-center text-sm text-neutral-500">
-                Start a new conversation by asking a question about your selected document.
-              </div>
-            ) : (
-              messages.map((message) => (
-                <ChatBubble
-                  key={message.id}
-                  role={message.role}
-                  content={message.content}
-                  fallbackUsed={Boolean(message.fallback_used)}
-                  timestamp={message.created_at}
-                />
-              ))
-            )}
-
-            {streaming ? <TypingIndicator /> : null}
-            <div ref={messagesBottomRef} />
+          {/* Input Area */}
+          <div className="border-t border-neutral-200 bg-white px-4 py-4 sm:px-8 md:pb-6">
+            <div className="mx-auto max-w-3xl">
+              <ChatInput
+                value={query}
+                disabled={streaming || Boolean(chatQuota && chatQuota.remaining <= 0)}
+                loading={streaming}
+                maxLength={4000}
+                onChange={setQuery}
+                onSubmit={onSendMessage}
+                onUploadClick={() => fileInputRef.current?.click()}
+              />
+              {error && (
+                <p className="mt-2 text-center text-xs font-medium text-red-500 animate-in fade-in slide-in-from-bottom-1">
+                  {error}
+                </p>
+              )}
+            </div>
           </div>
+        </div>
 
-          <div className="border-t border-neutral-200 px-4 py-4 sm:px-5">
-            <ChatInput
-              value={query}
-              disabled={!selectedDocument || streaming || Boolean(chatQuota && chatQuota.remaining <= 0)}
-              loading={streaming}
-              maxLength={4000}
-              onChange={setQuery}
-              onSubmit={onSendMessage}
-            />
-          </div>
-        </Card>
-
+        {/* Sidebar Info - Desktop */}
         <motion.aside
           initial={{ opacity: 0, x: 8 }}
           animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.22 }}
-          className="space-y-3 md:space-y-4"
+          className="hidden space-y-4 xl:block"
         >
-          <Card className="p-5">
-            <h2 className="text-sm font-semibold uppercase tracking-[0.08em] text-neutral-500">Document Panel</h2>
-
-            {selectedDocument ? (
-              <div className="mt-4 space-y-4 text-sm">
-                <div>
-                  <p className="font-medium text-neutral-900">{selectedDocument.file_name}</p>
-                  <p className="mt-1 text-neutral-500">Uploaded {formatDate(selectedDocument.created_at)}</p>
+          {selectedDocument && (
+            <Card className="p-5">
+              <h2 className="text-xs font-bold uppercase tracking-widest text-neutral-400">Context Source</h2>
+              <div className="mt-4 space-y-3">
+                <p className="text-sm font-bold text-neutral-900 truncate" title={selectedDocument.file_name}>
+                  {selectedDocument.file_name}
+                </p>
+                <div className="space-y-1.5 text-xs text-neutral-500">
+                  <p>Uploaded: {formatDate(selectedDocument.created_at)}</p>
+                  <p>Status: <span className="text-green-600 font-semibold">{selectedDocument.indexing_status}</span></p>
                 </div>
-
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge
-                    tone={
-                      selectedDocument.indexing_status === 'indexed'
-                        ? 'default'
-                        : selectedDocument.indexing_status === 'error'
-                          ? 'danger'
-                          : 'muted'
-                    }
-                  >
-                    {statusFromDocument(selectedDocument.indexing_status)}
-                  </Badge>
-                  <span className="text-neutral-500">
-                    {selectedDocument.page_count} pages • {selectedDocument.chunk_count} chunks
-                  </span>
-                </div>
-
-                <div>
-                  <p className="mb-2 text-xs uppercase tracking-[0.08em] text-neutral-500">Extracted preview</p>
-                  <p className="rounded-xl border border-neutral-200 bg-neutral-50 p-3 text-neutral-600">
-                    {previewText}
+                
+                <div className="pt-2">
+                   <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-400 mb-2">Preview</p>
+                   <p className="rounded-xl bg-neutral-50 p-3 text-xs leading-relaxed text-neutral-600 border border-neutral-100 italic">
+                    "{previewText}"
                   </p>
                 </div>
 
-                <div className="space-y-2">
-                  <Button
-                    variant="secondary"
-                    className="w-full justify-center"
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={uploading}
-                  >
-                    <FileUp size={16} />
-                    {uploading ? `Uploading ${uploadProgress}%` : 'Upload new document'}
-                  </Button>
-
+                <div className="flex gap-2 pt-2">
                   <Button
                     variant="ghost"
-                    className="w-full justify-center text-neutral-700"
+                    size="sm"
+                    className="flex-1 text-red-600 hover:bg-red-50 hover:text-red-700"
                     onClick={() => setConfirmDeleteOpen(true)}
                   >
-                    <Trash2 size={16} />
-                    Delete document
+                    <Trash2 size={14} />
+                    Delete
                   </Button>
                 </div>
               </div>
-            ) : (
-              <p className="mt-4 rounded-xl border border-dashed border-neutral-300 px-3 py-6 text-center text-sm text-neutral-500">
-                No document selected.
-              </p>
-            )}
-
-            <input
-              ref={fileInputRef}
-              type="file"
-              className="hidden"
-              accept="application/pdf"
-              onChange={async (event) => {
-                const file = event.target.files?.[0] || null;
-                if (file) {
-                  const maxFileSizeMb = demoLimits?.maxFileSizeMb || 10;
-                  const maxBytes = maxFileSizeMb * 1024 * 1024;
-
-                  if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
-                    setError('Only PDF files are supported.');
-                  } else if (file.size > maxBytes) {
-                    setError(`File exceeds ${maxFileSizeMb}MB demo limit.`);
-                  } else {
-                    await handleUpload(file);
-                  }
-                }
-                event.target.value = '';
-              }}
-            />
-          </Card>
+            </Card>
+          )}
 
           <Card className="p-5">
-            <h3 className="text-sm font-semibold uppercase tracking-[0.08em] text-neutral-500">Workspace Health</h3>
-            <div className="mt-3 space-y-2 text-sm text-neutral-600">
-              <p>{loadingDocuments ? 'Refreshing documents...' : `${documents.length} document(s) loaded`}</p>
-              <p>{loadingSessions ? 'Refreshing sessions...' : `${sessions.length} session(s) available`}</p>
-              {chatQuota ? <p>{chatQuota.remaining} chat request(s) remaining today</p> : null}
+            <h3 className="text-xs font-bold uppercase tracking-widest text-neutral-400">Workspace</h3>
+            <div className="mt-4 space-y-4">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-neutral-500">Retrieval Mode</span>
+                  <span className="font-bold text-neutral-900 uppercase tracking-tighter">{retrievalMode}</span>
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-neutral-500">Health</span>
+                  <span className="flex items-center gap-1.5 font-bold text-green-600">
+                    <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
+                    Optimal
+                  </span>
+                </div>
+              </div>
+              
+              <div className="rounded-xl bg-neutral-50 p-3 border border-neutral-100">
+                <p className="text-[10px] text-neutral-400 leading-tight">
+                  {demoMessage}
+                </p>
+              </div>
             </div>
           </Card>
         </motion.aside>
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          className="hidden"
+          accept="application/pdf"
+          onChange={async (event) => {
+            const file = event.target.files?.[0] || null;
+            if (file) {
+              const maxFileSizeMb = demoLimits?.maxFileSizeMb || 10;
+              const maxBytes = maxFileSizeMb * 1024 * 1024;
+              if (file.size > maxBytes) {
+                setError(`File exceeds ${maxFileSizeMb}MB demo limit.`);
+              } else {
+                await handleUpload(file);
+              }
+            }
+            event.target.value = '';
+          }}
+        />
       </div>
 
       <Modal
         open={confirmDeleteOpen}
         onClose={() => setConfirmDeleteOpen(false)}
-        title="Delete selected document?"
-        description="This removes all indexed chunks and chat sessions linked to the document."
+        title="Delete context?"
+        description="All indexed chunks and linked sessions will be removed."
         confirmLabel="Delete"
         onConfirm={async () => {
-          if (!selectedDocument) {
-            return;
-          }
+          if (!selectedDocument) return;
           await removeDocument(selectedDocument.id);
           setConfirmDeleteOpen(false);
           setMessages([]);
