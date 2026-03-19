@@ -7,7 +7,7 @@ function withTimeout(promise, timeoutMs, timeoutCode = 'AI_TIMEOUT') {
     promise,
     new Promise((_, reject) => {
       setTimeout(() => {
-        reject(new AppError(504, timeoutCode, 'AI request timed out for demo environment.'));
+        reject(new AppError(504, timeoutCode, 'AI request timed out.'));
       }, timeoutMs).unref();
     }),
   ]);
@@ -22,11 +22,11 @@ function mapGeminiError(error) {
   const message = String(error?.message || '').toLowerCase();
 
   if (status === 429 || message.includes('429') || message.includes('quota')) {
-    return new AppError(429, 'AI_QUOTA_EXCEEDED', 'AI quota exceeded for demo environment.');
+    return new AppError(429, 'AI_QUOTA_EXCEEDED', 'AI quota exceeded.');
   }
 
   if (status === 504 || message.includes('timeout')) {
-    return new AppError(504, 'AI_TIMEOUT', 'AI request timed out for demo environment.');
+    return new AppError(504, 'AI_TIMEOUT', 'AI request timed out.');
   }
 
   return new AppError(503, 'AI_TEMPORARILY_UNAVAILABLE', 'AI service is temporarily unavailable.');

@@ -2,6 +2,7 @@ const app = require('./app');
 const env = require('./config/env');
 const logger = require('./config/logger');
 const { closePool } = require('./database/client');
+const { startDocumentWorker, stopDocumentWorker } = require('./services/documentWorkerService');
 
 const server = app.listen(env.port, env.host, () => {
   logger.info('Server started', {
@@ -9,10 +10,16 @@ const server = app.listen(env.port, env.host, () => {
     port: env.port,
     env: env.nodeEnv,
   });
+
+  if (env.enableDocumentWorker) {
+    startDocumentWorker();
+  }
 });
 
 async function shutdown(signal) {
   logger.info('Shutting down', { signal });
+
+  stopDocumentWorker();
 
   server.close(async () => {
     await closePool();

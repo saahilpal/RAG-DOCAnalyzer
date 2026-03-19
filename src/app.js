@@ -30,22 +30,23 @@ app.use(
 app.use(
   cors({
     origin: (origin, callback) => {
-      if (!origin) return callback(null, true);
+      if (!origin) {
+        return callback(null, true);
+      }
 
       const isAllowed = allowedOrigins.some((allowedOrigin) => {
-        if (origin === allowedOrigin) return true;
+        if (origin === allowedOrigin) {
+          return true;
+        }
 
-        if (
-          allowedOrigin.includes('vercel.app') &&
-          origin.endsWith('.vercel.app')
-        ) {
+        if (allowedOrigin.includes('vercel.app') && origin.endsWith('.vercel.app')) {
           return true;
         }
 
         return false;
       });
 
-      return callback(null, isAllowed); // ✅ IMPORTANT FIX
+      callback(null, isAllowed);
     },
     credentials: true,
   }),
@@ -74,7 +75,7 @@ app.use(express.json({ limit: env.maxRequestBodySize }));
 app.use(express.urlencoded({ extended: false, limit: env.maxRequestBodySize }));
 app.use(cookieParser());
 
-app.use('/api', routes);
+app.use('/api/v1', routes);
 
 app.use(notFound);
 app.use(errorHandler);

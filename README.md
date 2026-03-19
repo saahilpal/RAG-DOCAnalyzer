@@ -1,186 +1,130 @@
-# RAG DOCAnalyzer
+# Document Analyzer RAG
 
-Production-style, stateless Document RAG system built for reliable free-tier demos.
+Chat with your documents. Like ChatGPT, but context-aware.
 
-![Node.js](https://img.shields.io/badge/Node.js-Express-black?style=flat-square)
-![Next.js](https://img.shields.io/badge/Next.js-App%20Router-black?style=flat-square)
-![Supabase](https://img.shields.io/badge/Supabase-Postgres%20%2B%20Storage-black?style=flat-square)
-![Gemini](https://img.shields.io/badge/Google-Gemini%201.5%20Flash-black?style=flat-square)
+## Overview
 
-## Architecture
+Document Analyzer RAG is a chat-first application for asking questions, exploring PDFs, and carrying context forward across follow-up messages. Instead of treating uploaded files like a dashboard or document management system, the product keeps the experience centered on conversation. Documents become lightweight attachments to a chat, so the assistant can answer naturally while staying grounded in the right sources.
 
-### Full Project Architecture
+This makes the workflow useful for research, internal notes, product planning, hiring packets, policies, and any other documents that need explanation, synthesis, or comparison through a conversational interface.
 
-![Document Analyzer RAG Architecture](./docs/architecture.svg)
+## Features
 
-### RAG Core Architecture
+- Conversational RAG with multi-turn context
+- Multi-document retrieval scoped to the active chat
+- Streaming responses over Server-Sent Events
+- Async PDF processing with clear document states
+- OTP-based authentication with session restore
+- Chat history sidebar with isolated per-chat context
+- Vector retrieval with PostgreSQL FTS fallback
 
-![RAG Core Architecture](./docs/rag-architecture.svg)
+## How It Works
 
-## End-to-End RAG Flow
-
-### 1) Upload and Index
-
-1. User uploads PDF to `POST /api/documents/upload`.
-2. API validates file type, size, and PDF signature.
-3. PDF text is extracted with `pdf-parse`.
-4. Text is chunked with overlap.
-5. Chunks are stored in Postgres with `search_vector`.
-6. Optional vector embeddings are generated only in `RETRIEVAL_MODE=vector`.
-7. File is stored in Supabase Storage (`documents` bucket).
-
-### 2) Chat and Retrieval
-
-1. User sends query to `POST /api/chat/stream`.
-2. Auth, per-IP rate limit, and per-user daily quota are checked.
-3. Query cache is checked with key `(document_id + normalized_query)`.
-4. Retrieval runs in default FTS mode (`websearch_to_tsquery` + `ts_rank_cd`).
-5. Top chunks are injected into the RAG prompt.
-6. Gemini streams tokens via SSE.
-7. If AI fails (`AI_QUOTA_EXCEEDED`, `AI_TIMEOUT`, `AI_TEMPORARILY_UNAVAILABLE`), extractive fallback is returned.
-8. Response is persisted to session history and cached with TTL.
-
-## Demo Guardrails (Intentional)
-
-This public deployment is a trial/demo environment. Limits are strict by design for reliability and cost control.
-
-| Control | Env key | Default |
-|---|---|---|
-| Max file size | `MAX_FILE_SIZE_MB` | `10` |
-| Max pages per document | `MAX_PAGES_PER_DOC` | `40` |
-| Max chunks per document | `MAX_CHUNKS_PER_DOC` | `200` |
-| Max context chunks to AI | `RAG_TOP_K` | `5` |
-| Max documents per user | `MAX_DOCS_PER_USER` | `3` |
-| Max chat requests per day | `MAX_CHAT_REQUESTS_PER_DAY` | `20` |
-| Query cache TTL (seconds) | `CACHE_TTL_SECONDS` | `600` |
-
-## RAG Tuning Variables
-
-Added and wired in backend config/runtime:
-
-| Variable | Default | Purpose |
-|---|---|---|
-| `RAG_TOP_K` | `5` | Final chunks sent to the model |
-| `RAG_CANDIDATE_PAGE_SIZE` | `400` | Candidate rows considered before top-k slice |
-| `RAG_HISTORY_LIMIT` | `50` | Max messages returned for a session history call |
-| `RAG_TOKEN_TO_CHAR_RATIO` | `4` | Approx token-to-char ratio used for prompt/fallback clipping |
-| `RAG_CHUNK_TOKENS` | `1000` | Chunk size for ingestion |
-| `RAG_CHUNK_OVERLAP_TOKENS` | `200` | Chunk overlap for ingestion |
+1. Start a chat and optionally attach up to three PDFs.
+2. The backend stores and indexes documents asynchronously while the UI reflects upload and processing state.
+3. Each message uses recent chat history plus retrieved chunks from attached documents to generate a streamed response.
 
 ## Tech Stack
 
-- Frontend: Next.js App Router, TypeScript, TailwindCSS, Framer Motion
-- Backend: Node.js, Express, SSE streaming
-- Database: Supabase Postgres (`pg`)
-- Retrieval: Postgres FTS (default), pgvector (optional)
-- Storage: Supabase Storage
-- AI: Gemini (`gemini-1.5-flash`, optional `text-embedding-004`)
-- Auth: JWT + HTTP-only cookie + bcrypt
+- Frontend: Next.js, React, Tailwind CSS, Framer Motion
+- Backend: Node.js, Express
+- Database: PostgreSQL on Supabase
+- File Storage: Supabase Storage
+- AI: Google Gemini for generation and optional embeddings
+- Deployment: Vercel for frontend, Render for backend
 
-## Recent Optimizations & Enhancements
+## Preview
 
-- **High-Performance Indexing**: PDF chunk insertion now uses **multi-row batch processing**, significantly reducing database round-trips and speeding up the indexing of large documents.
-- **Password Recovery**: Integrated `nodemailer` to support secure password reset flows via **SMTP and 6-digit OTP codes**.
-- **Enhanced Security**: 
-  - JWT verification now explicitly enforces the `HS256` algorithm to prevent algorithm-switching attacks.
-  - Added **Quota Refund Logic**: Daily chat usage is automatically refunded if a streaming request fails before the AI starts generating, ensuring fair usage for users.
-- **Improved Retrieval**: Refined the Full-Text Search (FTS) retrieval path for more precise context extraction.
+The interface is a minimal chat workspace with:
 
-## Monorepo Structure
+- a sidebar for chat history
+- a streaming conversation thread
+- lightweight document attachment chips
+- OTP sign-in and session restore
 
-```text
-.
-├── src/                       # Backend source (Express, RAG logic, Services)
-├── database/schema.sql        # Unified Supabase Postgres schema
-├── frontend/                  # Next.js frontend (App Router, Framer Motion)
-├── docs/architecture.svg      # System-wide architectural diagram
-├── docs/rag-architecture.svg  # Detailed RAG pipeline visualization
-├── render.yaml                # Render blueprint for backend deployment
-└── DEPLOYMENT_CHECKLIST.md    # Production deployment and config guide
+Technical architecture artwork is available at [`docs/architecture.svg`](./docs/architecture.svg).
+
+## Run Locally
+
+### 1. Install dependencies
+
+```bash
+npm install
+cd frontend && npm install
 ```
 
-## API Endpoints
+### 2. Configure environment variables
 
-Auth:
-- `POST /api/auth/register`
-- `POST /api/auth/login`
-- `POST /api/auth/logout`
-- `GET /api/auth/me`
+Backend:
 
-Documents:
-- `POST /api/documents/upload`
-- `GET /api/documents`
-- `DELETE /api/documents/:id`
+```bash
+cp .env.example .env
+```
 
-Chat:
-- `POST /api/chat/stream`
-- `GET /api/chat/sessions`
-- `GET /api/chat/sessions/:sessionId/messages`
-- `GET /api/chat/quota`
+Frontend:
 
-System:
-- `GET /api/health`
-- `GET /api/health/live`
-- `GET /api/health/ready`
-- `GET /api/limits`
+```bash
+cd frontend
+cp .env.example .env.local
+```
 
-## Environment Variables
+Required backend variables include:
 
-Backend env template: [`.env.example`](./.env.example)
-
-Required backend keys:
 - `DATABASE_URL`
 - `SUPABASE_URL`
 - `SUPABASE_SERVICE_KEY`
 - `GEMINI_API_KEY`
 - `JWT_SECRET`
 - `CORS_ORIGIN`
+- SMTP credentials for OTP email delivery
 
-Frontend env template: [`frontend/.env.example`](./frontend/.env.example)
+Required frontend variable:
 
-Required frontend key:
 - `NEXT_PUBLIC_API_URL`
 
-## Quick Start (Local)
+### 3. Initialize and run
 
-### 1) Backend
+From the repo root:
 
 ```bash
-npm install
-cp .env.example .env
 npm run db:schema
 npm run dev
 ```
 
-### 2) Frontend
+In a second terminal:
 
 ```bash
 cd frontend
-npm install
-cp .env.example .env.local
 npm run dev
-```
-
-## Validation
-
-From repo root:
-
-```bash
-npm test
-npm run frontend:lint
-npm run frontend:build
 ```
 
 ## Deployment
 
-- Backend on Render: [render.yaml](./render.yaml)
-- Frontend on Vercel: [frontend/vercel.json](./frontend/vercel.json)
-- Step-by-step checklist: [DEPLOYMENT_CHECKLIST.md](./DEPLOYMENT_CHECKLIST.md)
+The project is structured for:
 
-## Developer
+- Vercel for the Next.js frontend
+- Render for the Express backend
+- Supabase for PostgreSQL and file storage
 
-**Sahil Pal**
+Deployment references:
 
-- GitHub: https://github.com/saahilpal
-- LinkedIn: https://www.linkedin.com/in/sahiilpal
-- LeetCode: https://leetcode.com/u/saahiilpal/
+- Backend blueprint: [`render.yaml`](./render.yaml)
+- Frontend config: [`frontend/vercel.json`](./frontend/vercel.json)
+- Step-by-step deployment guide: [`DEPLOYMENT_CHECKLIST.md`](./DEPLOYMENT_CHECKLIST.md)
+
+## Verification
+
+From the repo root:
+
+```bash
+npm test
+npm run frontend:test
+npm run frontend:lint
+npm run frontend:build
+```
+
+## Future Improvements
+
+- Dedicated worker service for higher indexing throughput
+- Richer retrieval reranking and citation UX
+- Chat export and workspace sharing

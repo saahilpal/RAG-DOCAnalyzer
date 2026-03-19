@@ -1,57 +1,32 @@
+const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+
 const db = require('../database/client');
 const env = require('../config/env');
-const { conflict, unauthorized, notFound } = require('../utils/errors');
+const { AppError, notFound } = require('../utils/errors');
 
 function normalizeEmail(email) {
   return String(email || '').trim().toLowerCase();
 }
 
-async function registerUser({ email, password }) {
-  const normalizedEmail = normalizeEmail(email);
-
-  const existing = await db.query('SELECT id FROM users WHERE email = $1 LIMIT 1', [normalizedEmail]);
-  if (existing.rowCount > 0) {
-    throw conflict('Email is already registered.');
-  }
-
-  const passwordHash = await bcrypt.hash(password, 12);
-
-  const result = await db.query(
-    `INSERT INTO users (email, password_hash)
-     VALUES ($1, $2)
-     RETURNING id, email, created_at`,
-    [normalizedEmail, passwordHash],
-  );
-
-  return result.rows[0];
+function createOtpValue() {
+  return crypto.randomInt(100_000, 1_000_000).toString();
 }
 
-async function loginUser({ email, password }) {
-  const normalizedEmail = normalizeEmail(email);
+function getOtpExpiryDate() {
+  return new Date(Date.now() + env.otpExpirySeconds * 1000);
+}
 
-  const result = await db.query(
-    'SELECT id, email, password_hash, created_at FROM users WHERE email = $1 LIMIT 1',
-    [normalizedEmail],
-  );
+function getRetryAfterSeconds(createdAt) {
+  const retryAfterMs =
+    new Date(createdAt).getTime() + env.otpResendCooldownSeconds * 1000 - Date.now();
 
-  if (result.rowCount === 0) {
-    throw unauthorized('Invalid email or password.');
-  }
+  return Math.max(0, Math.ceil(retryAfterMs / 1000));
+}
 
-  const user = result.rows[0];
-  const isValid = await bcrypt.compare(password, user.password_hash);
-
-  if (!isValid) {
-    throw unauthorized('Invalid email or password.');
-  }
-
-  return {
-    id: user.id,
-    email: user.email,
-    created_at: user.created_at,
-  };
+function getHourlyEmailWindowLimitMessage() {
+  return 'Too many codes have been sent to this email recently. Please try again in about an hour.';
 }
 
 function signAuthToken(user) {
@@ -66,76 +41,233 @@ function signAuthToken(user) {
 }
 
 async function getUserById(userId) {
-  const result = await db.query('SELECT id, email, created_at FROM users WHERE id = $1 LIMIT 1', [userId]);
+  const result = await db.query(
+    'SELECT id, email, created_at, email_verified_at FROM users WHERE id = $1 LIMIT 1',
+    [userId],
+  );
+
   if (result.rowCount === 0) {
     throw notFound('User not found.');
   }
+
   return result.rows[0];
 }
 
 async function getUserByEmail(email) {
   const normalizedEmail = normalizeEmail(email);
-  const result = await db.query('SELECT id, email, created_at FROM users WHERE email = $1 LIMIT 1', [
-    normalizedEmail,
-  ]);
+  const result = await db.query(
+    'SELECT id, email, created_at, email_verified_at FROM users WHERE email = $1 LIMIT 1',
+    [normalizedEmail],
+  );
+
   return result.rows[0] || null;
 }
 
-async function createOtp(userId, type = 'password_reset') {
-  const otp = Math.floor(100_000 + Math.random() * 900_000).toString();
-  const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
-
-  await db.query('DELETE FROM otp_codes WHERE user_id = $1 AND type = $2', [userId, type]);
-
-  await db.query(
-    'INSERT INTO otp_codes (user_id, code, type, expires_at) VALUES ($1, $2, $3, $4)',
-    [userId, otp, type, expiresAt],
-  );
-
-  return otp;
+async function invalidateOtpForEmail(email) {
+  const normalizedEmail = normalizeEmail(email);
+  await db.query('DELETE FROM otp_codes WHERE email = $1', [normalizedEmail]);
 }
 
-async function verifyOtp(userId, code, type = 'password_reset') {
-  const result = await db.query(
-    'SELECT id FROM otp_codes WHERE user_id = $1 AND code = $2 AND type = $3 AND expires_at > NOW()',
-    [userId, code, type],
-  );
-
-  if (result.rowCount === 0) {
-    throw unauthorized('Invalid or expired OTP.');
-  }
-
-  return true;
+async function invalidateOtpCodeById(otpCodeId) {
+  await db.query('DELETE FROM otp_codes WHERE id = $1', [otpCodeId]);
 }
 
-async function resetPassword({ email, otp, newPassword }) {
-  const user = await getUserByEmail(email);
-  if (!user) {
-    throw unauthorized('Invalid or expired OTP.'); // Same message for security
-  }
+async function issueOtpForEmail(email) {
+  const normalizedEmail = normalizeEmail(email);
+  const otp = createOtpValue();
+  const otpHash = await bcrypt.hash(otp, 10);
+  const expiresAt = getOtpExpiryDate();
 
-  await verifyOtp(user.id, otp, 'password_reset');
+  const record = await db.withTransaction(async (client) => {
+    await client.query(
+      `DELETE FROM otp_codes
+       WHERE email = $1
+         AND created_at < NOW() - interval '24 hours'`,
+      [normalizedEmail],
+    );
 
-  const passwordHash = await bcrypt.hash(newPassword, 12);
+    const hourlyCountResult = await client.query(
+      `SELECT COUNT(*)::int AS request_count
+       FROM otp_codes
+       WHERE email = $1
+         AND created_at > NOW() - interval '1 hour'`,
+      [normalizedEmail],
+    );
 
-  await db.withTransaction(async (client) => {
-    await client.query('UPDATE users SET password_hash = $1 WHERE id = $2', [passwordHash, user.id]);
-    await client.query('DELETE FROM otp_codes WHERE user_id = $1 AND type = $2', [
-      user.id,
-      'password_reset',
-    ]);
+    if (Number(hourlyCountResult.rows[0]?.request_count || 0) >= env.otpMaxRequestsPerHour) {
+      throw new AppError(
+        429,
+        'OTP_EMAIL_HOURLY_LIMIT',
+        getHourlyEmailWindowLimitMessage(),
+      );
+    }
+
+    const existingResult = await client.query(
+      `SELECT id, created_at
+       FROM otp_codes
+       WHERE email = $1
+         AND consumed_at IS NULL
+         AND expires_at > NOW()
+       ORDER BY created_at DESC
+       LIMIT 1
+       FOR UPDATE`,
+      [normalizedEmail],
+    );
+
+    if (existingResult.rowCount > 0) {
+      const retryAfterSeconds = getRetryAfterSeconds(existingResult.rows[0].created_at);
+
+      if (retryAfterSeconds > 0) {
+        throw new AppError(
+          429,
+          'OTP_RESEND_COOLDOWN',
+          `Please wait ${retryAfterSeconds} seconds before requesting a new code.`,
+          { retryAfterSeconds },
+        );
+      }
+    }
+
+    if (existingResult.rowCount > 0) {
+      await client.query(
+        `UPDATE otp_codes
+         SET consumed_at = COALESCE(consumed_at, NOW())
+         WHERE id = $1`,
+        [existingResult.rows[0].id],
+      );
+    }
+
+    const insertResult = await client.query(
+      `INSERT INTO otp_codes (email, otp_hash, expires_at, attempts)
+       VALUES ($1, $2, $3, 0)
+       RETURNING id, email, created_at, expires_at`,
+      [normalizedEmail, otpHash, expiresAt],
+    );
+
+    return insertResult.rows[0];
   });
 
-  return { id: user.id, email: user.email };
+  return {
+    id: record.id,
+    email: normalizedEmail,
+    otp,
+    expiresAt: record.expires_at,
+    resendCooldownSeconds: env.otpResendCooldownSeconds,
+  };
+}
+
+async function requestOtpForEmail({ email }) {
+  return issueOtpForEmail(email);
+}
+
+async function resendOtpForEmail({ email }) {
+  return issueOtpForEmail(email);
+}
+
+async function verifyOtpForEmail({ email, otp }) {
+  const normalizedEmail = normalizeEmail(email);
+  const normalizedOtp = String(otp || '').trim();
+
+  const user = await db.withTransaction(async (client) => {
+    const otpResult = await client.query(
+      `SELECT id, email, otp_hash, expires_at, attempts, created_at, consumed_at
+       FROM otp_codes
+       WHERE email = $1
+       ORDER BY created_at DESC
+       LIMIT 1
+       FOR UPDATE`,
+      [normalizedEmail],
+    );
+
+    if (otpResult.rowCount === 0) {
+      throw new AppError(401, 'OTP_INVALID', 'The verification code is invalid.');
+    }
+
+    const record = otpResult.rows[0];
+
+    if (record.consumed_at) {
+      throw new AppError(401, 'OTP_INVALID', 'The verification code is invalid.');
+    }
+
+    if (new Date(record.expires_at).getTime() <= Date.now()) {
+      await client.query(
+        `UPDATE otp_codes
+         SET consumed_at = COALESCE(consumed_at, NOW())
+         WHERE id = $1`,
+        [record.id],
+      );
+      throw new AppError(401, 'OTP_EXPIRED', 'This verification code has expired. Request a new one.');
+    }
+
+    if (Number(record.attempts || 0) >= env.otpMaxAttempts) {
+      await client.query(
+        `UPDATE otp_codes
+         SET consumed_at = COALESCE(consumed_at, NOW())
+         WHERE id = $1`,
+        [record.id],
+      );
+      throw new AppError(
+        429,
+        'OTP_TOO_MANY_ATTEMPTS',
+        'Too many incorrect attempts. Request a new code.',
+      );
+    }
+
+    const isValid = await bcrypt.compare(normalizedOtp, record.otp_hash);
+
+    if (!isValid) {
+      const nextAttempts = Number(record.attempts || 0) + 1;
+
+      await client.query(
+        `UPDATE otp_codes
+         SET attempts = $2,
+             consumed_at = CASE WHEN $2 >= $3 THEN NOW() ELSE consumed_at END
+         WHERE id = $1`,
+        [record.id, nextAttempts, env.otpMaxAttempts],
+      );
+
+      if (nextAttempts >= env.otpMaxAttempts) {
+        throw new AppError(
+          429,
+          'OTP_TOO_MANY_ATTEMPTS',
+          'Too many incorrect attempts. Request a new code.',
+        );
+      }
+
+      throw new AppError(401, 'OTP_INVALID', 'The verification code is incorrect.');
+    }
+
+    const userResult = await client.query(
+      `INSERT INTO users (email, email_verified_at)
+       VALUES ($1, NOW())
+       ON CONFLICT (email)
+       DO UPDATE SET email_verified_at = COALESCE(users.email_verified_at, NOW())
+       RETURNING id, email, created_at, email_verified_at`,
+      [normalizedEmail],
+    );
+
+    await client.query(
+      `UPDATE otp_codes
+       SET consumed_at = COALESCE(consumed_at, NOW())
+       WHERE id = $1`,
+      [record.id],
+    );
+
+    return userResult.rows[0];
+  });
+
+  return {
+    user,
+    token: signAuthToken(user),
+  };
 }
 
 module.exports = {
-  registerUser,
-  loginUser,
   signAuthToken,
   getUserById,
   getUserByEmail,
-  createOtp,
-  verifyOtp,
-  resetPassword,
+  requestOtpForEmail,
+  resendOtpForEmail,
+  verifyOtpForEmail,
+  invalidateOtpForEmail,
+  invalidateOtpCodeById,
 };

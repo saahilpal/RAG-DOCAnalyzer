@@ -3,8 +3,8 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { AppShell } from '@/components/layout/app-shell';
-import { AppDataProvider } from '@/hooks/use-app-data';
 import { useAuth } from '@/hooks/use-auth';
+import { ChatWorkspaceProvider } from '@/hooks/use-chat-workspace';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -27,8 +27,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }
 
   return (
-    <AppDataProvider>
+    <ChatWorkspaceProvider>
       <AppShell>{children}</AppShell>
-    </AppDataProvider>
+    </ChatWorkspaceProvider>
   );
 }

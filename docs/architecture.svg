@@ -21,7 +21,7 @@
   <rect x="0" y="0" width="1400" height="180" fill="url(#topFade)" />
 
   <text x="72" y="86" class="title">Document Analyzer RAG • Production Architecture</text>
-  <text x="72" y="118" class="subtitle">Stateless, free-tier friendly design with strict limits, fallback safety, and transparent demo behavior.</text>
+  <text x="72" y="118" class="subtitle">Stateless architecture with bounded context, predictable limits, and resilient retrieval and streaming behavior.</text>
 
   <text x="72" y="168" class="section">Presentation Layer</text>
   <text x="72" y="366" class="section">Application Layer</text>
@@ -59,21 +59,21 @@
   <text x="426" y="468" class="boxText">Default: PostgreSQL FTS</text>
   <text x="426" y="492" class="boxText">websearch_to_tsquery + ts_rank_cd</text>
   <text x="426" y="516" class="boxText">Top-K context chunks</text>
-  <text x="426" y="540" class="boxText">Query cache (TTL 10 min)</text>
+  <text x="426" y="540" class="boxText">Scoped by chat attachments</text>
   <text x="426" y="564" class="boxText">Vector mode optional</text>
 
   <rect x="732" y="398" rx="22" ry="22" width="300" height="220" fill="#FFFFFF" stroke="#E5E5E5" stroke-width="1.5" filter="url(#shadow)"/>
   <text x="756" y="442" class="boxTitle">RAG + Streaming</text>
-  <text x="756" y="468" class="boxText">Prompt with retrieved context</text>
+  <text x="756" y="468" class="boxText">Prompt with history + context</text>
   <text x="756" y="492" class="boxText">Gemini stream to client (SSE)</text>
-  <text x="756" y="516" class="boxText">Fallback extractive response</text>
-  <text x="756" y="540" class="boxText">Never return empty answer</text>
+  <text x="756" y="516" class="boxText">Assistant saved after completion</text>
+  <text x="756" y="540" class="boxText">Explicit stream error events</text>
   <text x="756" y="564" class="boxText">Error codes normalized</text>
 
   <rect x="1062" y="398" rx="22" ry="22" width="266" height="220" fill="#FFFFFF" stroke="#E5E5E5" stroke-width="1.5" filter="url(#shadow)"/>
   <text x="1086" y="442" class="boxTitle">Ops &amp; Safety</text>
-  <text x="1086" y="468" class="boxText">/health/live + /health/ready</text>
-  <text x="1086" y="492" class="boxText">ready_degraded fallback mode</text>
+  <text x="1086" y="468" class="boxText">/api/v1/health/live + /ready</text>
+  <text x="1086" y="492" class="boxText">Async worker for document indexing</text>
   <text x="1086" y="516" class="boxText">Daily quota atomic consume</text>
   <text x="1086" y="540" class="boxText">Auth brute-force limiter</text>
   <text x="1086" y="564" class="boxText">Strict CORS + origin guard</text>
@@ -81,8 +81,8 @@
   <!-- Data layer -->
   <rect x="132" y="688" rx="20" ry="20" width="370" height="120" fill="#FFFFFF" stroke="#E5E5E5" stroke-width="1.5" filter="url(#shadow)"/>
   <text x="156" y="734" class="boxTitle">Supabase PostgreSQL</text>
-  <text x="156" y="760" class="boxText">users • documents • chunks • sessions</text>
-  <text x="156" y="782" class="boxText">messages • query_cache • daily_chat_usage</text>
+  <text x="156" y="760" class="boxText">users • chats • messages • documents</text>
+  <text x="156" y="782" class="boxText">chat_documents • chunks • daily_chat_usage</text>
 
   <rect x="542" y="688" rx="20" ry="20" width="300" height="120" fill="#FFFFFF" stroke="#E5E5E5" stroke-width="1.5" filter="url(#shadow)"/>
   <text x="566" y="734" class="boxTitle">Supabase Storage</text>

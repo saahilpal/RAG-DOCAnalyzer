@@ -6,7 +6,7 @@ services:
     rootDir: .
     buildCommand: npm install
     startCommand: npm start
-    healthCheckPath: /api/health/live
+    healthCheckPath: /api/v1/health/live
     autoDeploy: true
     envVars:
       - key: NODE_ENV
@@ -41,6 +41,14 @@ services:
         value: 7d
       - key: AUTH_COOKIE_NAME
         value: doc_analyzer_token
+      - key: OTP_EXPIRY_SECONDS
+        value: 300
+      - key: OTP_RESEND_COOLDOWN_SECONDS
+        value: 60
+      - key: OTP_MAX_ATTEMPTS
+        value: 5
+      - key: OTP_MAX_REQUESTS_PER_HOUR
+        value: 6
       - key: CORS_ORIGIN
         sync: false
       - key: RATE_LIMIT_WINDOW_MS
@@ -49,6 +57,10 @@ services:
         value: 120
       - key: AUTH_RATE_LIMIT_MAX
         value: 20
+      - key: OTP_REQUEST_IP_RATE_LIMIT_MAX
+        value: 30
+      - key: OTP_VERIFY_IP_RATE_LIMIT_MAX
+        value: 40
       - key: UPLOAD_RATE_LIMIT_MAX
         value: 20
       - key: CHAT_RATE_LIMIT_MAX
@@ -63,18 +75,30 @@ services:
         value: 40
       - key: MAX_CHUNKS_PER_DOC
         value: 200
-      - key: MAX_CONTEXT_CHUNKS
-        value: 4
       - key: MAX_CHAT_REQUESTS_PER_DAY
         value: 20
-      - key: MAX_DOCS_PER_USER
+      - key: MAX_DOCS_PER_CHAT
         value: 3
-      - key: CACHE_TTL_SECONDS
-        value: 600
-      - key: CHUNK_SIZE_TOKENS
-        value: 450
-      - key: CHUNK_OVERLAP_TOKENS
-        value: 80
+      - key: CHAT_HISTORY_LIMIT
+        value: 8
+      - key: CHAT_MESSAGE_LIST_LIMIT
+        value: 200
+      - key: RAG_TOP_K
+        value: 6
+      - key: RAG_CANDIDATE_PAGE_SIZE
+        value: 24
+      - key: RAG_TOKEN_TO_CHAR_RATIO
+        value: 4
+      - key: RAG_CHUNK_TOKENS
+        value: 1000
+      - key: RAG_CHUNK_OVERLAP_TOKENS
+        value: 200
+      - key: ENABLE_DOCUMENT_WORKER
+        value: true
+      - key: WORKER_POLL_INTERVAL_MS
+        value: 1000
+      - key: DOCUMENT_PROCESSING_RETRY_AFTER_MS
+        value: 900000
       - key: GITHUB_REPOSITORY_URL
         sync: false
       - key: RUN_LOCALLY_GUIDE_URL
@@ -89,3 +113,7 @@ services:
         sync: false
       - key: SMTP_FROM
         value: '"DocAnalyzer" <noreply@example.com>'
+      - key: MAIL_RETRY_ATTEMPTS
+        value: 3
+      - key: MAIL_RETRY_BACKOFF_MS
+        value: 300

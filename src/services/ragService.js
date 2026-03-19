@@ -1,132 +1,140 @@
 const env = require('../config/env');
-const logger = require('../config/logger');
 const db = require('../database/client');
 const { AppError } = require('../utils/errors');
 const { toVectorLiteral } = require('../utils/vector');
-const { embedTexts, streamGeneration } = require('./geminiService');
-const { getCachedAnswer, setCachedAnswer } = require('./cacheService');
-
-function normalizeChunks(rows) {
-  return rows.map((row) => ({
-    chunkIndex: Number(row.chunk_index) || 0,
-    content: String(row.content || ''),
-  }));
-}
+const geminiService = require('./geminiService');
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
 
 function getPromptChunkCharLimit() {
-  return clamp(Math.floor(env.ragChunkTokens * env.ragTokenToCharRatio), 400, 4000);
+  return clamp(Math.floor(env.chunkSizeTokens * env.ragTokenToCharRatio), 500, 4500);
 }
 
-function getFallbackSnippetLimit() {
-  return clamp(Math.floor(getPromptChunkCharLimit() / 4), 180, 1000);
+function normalizeChunks(rows) {
+  return rows.map((row) => ({
+    documentId: row.document_id,
+    fileName: String(row.file_name || 'Document'),
+    chunkIndex: Number(row.chunk_index) || 0,
+    content: String(row.content || ''),
+  }));
 }
 
-async function retrieveFtsChunks({ userId, documentId, query }) {
-  let result;
+function formatHistory(history) {
+  if (!Array.isArray(history) || history.length === 0) {
+    return 'No prior conversation.';
+  }
+
+  return history
+    .map((message) => `${message.role === 'assistant' ? 'Assistant' : 'User'}: ${String(message.content || '').trim()}`)
+    .join('\n');
+}
+
+function formatContext(chunks) {
+  if (!Array.isArray(chunks) || chunks.length === 0) {
+    return 'No uploaded document context attached to this chat.';
+  }
+
+  const charLimit = getPromptChunkCharLimit();
+
+  return chunks
+    .map((chunk, index) => {
+      const trimmed = chunk.content.replace(/\s+/g, ' ').trim().slice(0, charLimit);
+      return `[Source ${index + 1} | ${chunk.fileName} | chunk ${chunk.chunkIndex}] ${trimmed}`;
+    })
+    .join('\n\n');
+}
+
+function buildPrompt({ history, chunks, userMessage }) {
+  return `SYSTEM:
+You are a helpful assistant in a chat-first RAG workspace.
+Use uploaded document context when it is relevant and available.
+If the documents do not contain enough information, say that clearly and then answer with the best general guidance you can.
+Keep continuity with the existing conversation.
+
+CHAT HISTORY:
+${formatHistory(history)}
+
+DOCUMENT CONTEXT:
+${formatContext(chunks)}
+
+CURRENT USER MESSAGE:
+${userMessage}
+
+ASSISTANT RESPONSE:`;
+}
+
+async function retrieveFtsChunks({ userId, chatId, query }) {
   try {
-    result = await db.query(
-      `SELECT c.content, c.chunk_index,
+    const result = await db.query(
+      `SELECT d.id AS document_id,
+              d.file_name,
+              c.content,
+              c.chunk_index,
               ts_rank_cd(c.search_vector, websearch_to_tsquery('english', $3)) AS score
        FROM chunks c
        JOIN documents d ON d.id = c.document_id
-       WHERE d.user_id = $1
-         AND c.document_id = $2
+       JOIN chat_documents cd ON cd.document_id = d.id
+       JOIN chats ch ON ch.id = cd.chat_id
+       WHERE ch.user_id = $1
+         AND ch.id = $2
+         AND d.status = 'indexed'
          AND c.search_vector @@ websearch_to_tsquery('english', $3)
        ORDER BY score DESC, c.chunk_index ASC
        LIMIT $4`,
-      [userId, documentId, query, env.ragCandidatePageSize],
+      [userId, chatId, query, env.ragCandidatePageSize],
     );
-  } catch (_error) {
-    result = { rowCount: 0, rows: [] };
-  }
 
-  if (result.rowCount > 0) {
     return normalizeChunks(result.rows).slice(0, env.ragTopK);
+  } catch (error) {
+    throw new AppError(503, 'RETRIEVAL_FAILED', 'Failed to retrieve document context.', {
+      message: error.message,
+    });
   }
-
-  return [];
 }
 
-async function retrieveVectorChunks({ userId, documentId, query }) {
-  const [embedding] = await embedTexts([query]);
+async function retrieveVectorChunks({ userId, chatId, query }) {
+  const [embedding] = await geminiService.embedTexts([query]);
   const vectorLiteral = toVectorLiteral(embedding, env.embeddingDimension);
 
-  const result = await db.query(
-    `SELECT c.content, c.chunk_index
-     FROM chunks c
-     JOIN documents d ON d.id = c.document_id
-     WHERE d.user_id = $1
-       AND c.document_id = $2
-       AND c.embedding IS NOT NULL
-     ORDER BY c.embedding <-> $3::vector
-     LIMIT $4`,
-    [userId, documentId, vectorLiteral, env.ragTopK],
-  );
+  try {
+    const result = await db.query(
+      `SELECT d.id AS document_id,
+              d.file_name,
+              c.content,
+              c.chunk_index
+       FROM chunks c
+       JOIN documents d ON d.id = c.document_id
+       JOIN chat_documents cd ON cd.document_id = d.id
+       JOIN chats ch ON ch.id = cd.chat_id
+       WHERE ch.user_id = $1
+         AND ch.id = $2
+         AND d.status = 'indexed'
+         AND c.embedding IS NOT NULL
+       ORDER BY c.embedding <-> $3::vector
+       LIMIT $4`,
+      [userId, chatId, vectorLiteral, env.ragTopK],
+    );
 
-  if (result.rowCount === 0) {
-    return retrieveFtsChunks({ userId, documentId, query });
-  }
-
-  return normalizeChunks(result.rows);
-}
-
-async function retrieveRelevantChunks({ userId, documentId, query }) {
-  if (env.retrievalMode === 'vector') {
-    return retrieveVectorChunks({ userId, documentId, query });
-  }
-
-  return retrieveFtsChunks({ userId, documentId, query });
-}
-
-
-function buildPrompt({ query, chunks }) {
-  const chunkCharLimit = getPromptChunkCharLimit();
-  const context =
-    chunks.length > 0
-      ? chunks
-          .map((chunk, index) => {
-            const trimmed = chunk.content.replace(/\s+/g, ' ').trim().slice(0, chunkCharLimit);
-            return `[Chunk ${index + 1}] ${trimmed}`;
-          })
-          .join('\n\n')
-      : 'No relevant context was retrieved from the document.';
-
-  return `Answer only using the provided context. If context is insufficient, say that clearly.
-
-CONTEXT:
-${context}
-
-USER QUESTION:
-${query}`;
-}
-
-function buildFallbackAnswer({ query, chunks }) {
-  if (chunks.length === 0) {
-    return "No relevant content found in this document";
-  }
-
-  const snippetLimit = getFallbackSnippetLimit();
-  const bulletPoints = chunks
-    .map((chunk, index) => {
-      const sentence = chunk.content.replace(/\s+/g, ' ').trim().slice(0, snippetLimit);
-      return `${index + 1}. ${sentence}${sentence.length >= snippetLimit ? '...' : ''}`;
-    })
-    .join('\n');
-
-  return `I am having trouble generating a complete answer, but here is the most relevant information I found:\n\n${bulletPoints}`;
-}
-
-async function streamTextAsChunks(answer, onToken) {
-  const tokens = answer.split(/(\s+)/).filter(Boolean);
-  for (const token of tokens) {
-    if (typeof onToken === 'function') {
-      onToken(token);
+    if (result.rowCount === 0) {
+      return retrieveFtsChunks({ userId, chatId, query });
     }
+
+    return normalizeChunks(result.rows);
+  } catch (error) {
+    throw new AppError(503, 'RETRIEVAL_FAILED', 'Failed to retrieve document context.', {
+      message: error.message,
+    });
   }
+}
+
+async function retrieveRelevantChunks({ userId, chatId, query }) {
+  if (env.retrievalMode === 'vector') {
+    return retrieveVectorChunks({ userId, chatId, query });
+  }
+
+  return retrieveFtsChunks({ userId, chatId, query });
 }
 
 function assertNotAborted(shouldAbort) {
@@ -135,95 +143,42 @@ function assertNotAborted(shouldAbort) {
   }
 }
 
-async function streamRagAnswer({ userId, documentId, query, onToken, shouldAbort }) {
+async function streamAssistantReply({ userId, chatId, history, indexedDocuments, userMessage, onToken, shouldAbort }) {
   assertNotAborted(shouldAbort);
 
-  try {
-    const cached = await getCachedAnswer({ documentId, query });
-    if (cached) {
-      assertNotAborted(shouldAbort);
-      await streamTextAsChunks(cached.answer, onToken);
-      return {
-        answer: cached.answer,
-        chunks: Array.isArray(cached.sourceChunks) ? cached.sourceChunks : [],
-        fallbackUsed: Boolean(cached.fallbackUsed),
-        cached: true,
-        aiErrorCode: null,
-      };
-    }
-  } catch (error) {
-    logger.warn('Cache read failed. Continuing without cache.', {
-      documentId,
-      message: error?.message,
-    });
-  }
+  const chunks =
+    Array.isArray(indexedDocuments) && indexedDocuments.length > 0
+      ? await retrieveRelevantChunks({ userId, chatId, query: userMessage })
+      : [];
 
-  assertNotAborted(shouldAbort);
-  const chunks = await retrieveRelevantChunks({ userId, documentId, query });
-  assertNotAborted(shouldAbort);
-  const prompt = buildPrompt({ query, chunks });
+  const prompt = buildPrompt({
+    history: Array.isArray(history) ? history : [],
+    chunks,
+    userMessage,
+  });
 
   let answer = '';
-  let fallbackUsed = false;
-  let aiErrorCode = null;
 
-  try {
-    for await (const token of streamGeneration(prompt, { shouldAbort })) {
-      answer += token;
-      if (typeof onToken === 'function') {
-        onToken(token);
-      }
-    }
-  } catch (error) {
-    if (error?.code === 'CLIENT_DISCONNECTED') {
-      throw error;
-    }
-
-    fallbackUsed = true;
-    aiErrorCode = error?.code || 'AI_TEMPORARILY_UNAVAILABLE';
-    answer = buildFallbackAnswer({ query, chunks });
+  for await (const token of geminiService.streamGeneration(prompt, { shouldAbort })) {
     assertNotAborted(shouldAbort);
-    await streamTextAsChunks(answer, onToken);
+    answer += token;
+    if (typeof onToken === 'function') {
+      onToken(token);
+    }
   }
 
-  assertNotAborted(shouldAbort);
   if (!answer.trim()) {
-    fallbackUsed = true;
-    answer = buildFallbackAnswer({ query, chunks });
-    await streamTextAsChunks(answer, onToken);
-  }
-
-  const sourceChunks = chunks.map((chunk) => ({
-    chunkIndex: chunk.chunkIndex,
-    content: chunk.content.slice(0, getFallbackSnippetLimit()),
-  }));
-
-  try {
-    assertNotAborted(shouldAbort);
-    await setCachedAnswer({
-      documentId,
-      query,
-      answer,
-      fallbackUsed,
-      sourceChunks,
-    });
-  } catch (error) {
-    logger.warn('Cache write failed. Skipping cache persistence.', {
-      documentId,
-      message: error?.message,
-    });
+    throw new AppError(502, 'EMPTY_ASSISTANT_RESPONSE', 'The assistant returned an empty response.');
   }
 
   return {
     answer,
-    chunks,
-    fallbackUsed,
-    cached: false,
-    aiErrorCode,
+    retrievedChunkCount: chunks.length,
   };
 }
 
 module.exports = {
-  streamRagAnswer,
+  buildPrompt,
   retrieveRelevantChunks,
+  streamAssistantReply,
 };

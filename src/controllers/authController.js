@@ -1,44 +1,69 @@
 const env = require('../config/env');
 const { ok } = require('../utils/apiResponse');
-const {
-  registerUser,
-  loginUser,
-  signAuthToken,
-  getUserById,
-  getUserByEmail,
-  createOtp,
-  resetPassword,
-} = require('../services/authService');
-const { sendOtpEmail } = require('../services/mailService');
+const authService = require('../services/authService');
+const mailService = require('../services/mailService');
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
 function getAuthCookieOptions() {
   return {
     httpOnly: true,
-    sameSite: 'none',
-    secure: true,
+    sameSite: env.isProduction ? 'none' : 'lax',
+    secure: env.isProduction,
     maxAge: SEVEN_DAYS_MS,
     path: '/',
   };
 }
 
-async function register(req, res) {
-  const user = await registerUser(req.body);
-  const token = signAuthToken(user);
-
-  res.cookie(env.authCookieName, token, getAuthCookieOptions());
-
-  return ok(res, { user }, 201);
+function buildOtpResponse(message) {
+  return {
+    message,
+    expiresInSeconds: env.otpExpirySeconds,
+    resendCooldownSeconds: env.otpResendCooldownSeconds,
+  };
 }
 
-async function login(req, res) {
-  const user = await loginUser(req.body);
-  const token = signAuthToken(user);
+async function sendOtpAndHandleFailures(issuance) {
+  try {
+    await mailService.sendVerificationCodeEmail({
+      email: issuance.email,
+      otp: issuance.otp,
+    });
+  } catch (error) {
+    await authService.invalidateOtpCodeById(issuance.id);
+    throw error;
+  }
+}
 
-  res.cookie(env.authCookieName, token, getAuthCookieOptions());
+async function requestOtp(req, res) {
+  const issuance = await authService.requestOtpForEmail({ email: req.body.email });
+  await sendOtpAndHandleFailures(issuance);
 
-  return ok(res, { user });
+  return ok(
+    res,
+    buildOtpResponse('If the address can receive codes, a verification code has been sent.'),
+  );
+}
+
+async function resendOtp(req, res) {
+  const issuance = await authService.resendOtpForEmail({ email: req.body.email });
+  await sendOtpAndHandleFailures(issuance);
+
+  return ok(
+    res,
+    buildOtpResponse('If the address can receive codes, a fresh verification code has been sent.'),
+  );
+}
+
+async function verifyOtp(req, res) {
+  const result = await authService.verifyOtpForEmail(req.body);
+
+  res.cookie(env.authCookieName, result.token, getAuthCookieOptions());
+
+  return ok(res, {
+    token: result.token,
+    user: result.user,
+  });
 }
 
 async function logout(_req, res) {
@@ -52,32 +77,14 @@ async function logout(_req, res) {
 }
 
 async function me(req, res) {
-  const user = await getUserById(req.auth.userId);
+  const user = await authService.getUserById(req.auth.userId);
   return ok(res, { user });
 }
 
-async function forgotPassword(req, res) {
-  const { email } = req.body;
-  const user = await getUserByEmail(email);
-
-  if (user) {
-    const otp = await createOtp(user.id, 'password_reset');
-    await sendOtpEmail(user.email, otp);
-  }
-
-  return ok(res, { message: 'If an account exists, a reset code was sent.' });
-}
-
-async function resetPasswordHandler(req, res) {
-  await resetPassword(req.body);
-  return ok(res, { message: 'Password has been reset successfully.' });
-}
-
 module.exports = {
-  register,
-  login,
+  requestOtp,
+  resendOtp,
+  verifyOtp,
   logout,
   me,
-  forgotPassword,
-  resetPassword: resetPasswordHandler,
 };

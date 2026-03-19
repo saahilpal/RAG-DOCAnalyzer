@@ -1,25 +1,69 @@
 const express = require('express');
+const multer = require('multer');
+
+const env = require('../config/env');
 const { requireAuth } = require('../middlewares/requireAuth');
-const { chatIpLimiter } = require('../middlewares/limiters');
-const { validateBody, validateParams, validateQuery } = require('../middlewares/validate');
-const {
-  streamChatSchema,
-  listSessionsQuerySchema,
-  sessionIdParamsSchema,
-} = require('../validations/chatSchemas');
+const { chatIpLimiter, uploadIpLimiter } = require('../middlewares/limiters');
 const { asyncHandler } = require('../utils/asyncHandler');
+const { validateBody, validateFile, validateParams, validateQuery } = require('../middlewares/validate');
+const {
+  chatIdParamsSchema,
+  chatDocumentParamsSchema,
+  createChatSchema,
+  listChatsQuerySchema,
+  listMessagesQuerySchema,
+  streamMessageSchema,
+} = require('../validations/chatSchemas');
+const { uploadFileSchema } = require('../validations/documentSchemas');
 const controller = require('../controllers/chatController');
 
 const router = express.Router();
 
-router.post('/stream', chatIpLimiter, requireAuth, validateBody(streamChatSchema), controller.stream);
-router.get('/sessions', requireAuth, validateQuery(listSessionsQuerySchema), asyncHandler(controller.sessions));
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: env.maxUploadFileSizeBytes,
+  },
+});
+
+router.get('/', requireAuth, validateQuery(listChatsQuerySchema), asyncHandler(controller.listChats));
+router.post('/', requireAuth, validateBody(createChatSchema), asyncHandler(controller.createChat));
+router.get('/:chatId', requireAuth, validateParams(chatIdParamsSchema), asyncHandler(controller.getChat));
 router.get(
-  '/sessions/:sessionId/messages',
+  '/:chatId/messages',
   requireAuth,
-  validateParams(sessionIdParamsSchema),
-  asyncHandler(controller.messages),
+  validateParams(chatIdParamsSchema),
+  validateQuery(listMessagesQuerySchema),
+  asyncHandler(controller.listMessages),
 );
-router.get('/quota', requireAuth, asyncHandler(controller.quota));
+router.post(
+  '/:chatId/messages/stream',
+  chatIpLimiter,
+  requireAuth,
+  validateParams(chatIdParamsSchema),
+  validateBody(streamMessageSchema),
+  controller.streamMessage,
+);
+router.get(
+  '/:chatId/documents',
+  requireAuth,
+  validateParams(chatIdParamsSchema),
+  asyncHandler(controller.listDocuments),
+);
+router.post(
+  '/:chatId/documents',
+  uploadIpLimiter,
+  requireAuth,
+  validateParams(chatIdParamsSchema),
+  upload.single('file'),
+  validateFile(uploadFileSchema),
+  asyncHandler(controller.uploadDocument),
+);
+router.delete(
+  '/:chatId/documents/:documentId',
+  requireAuth,
+  validateParams(chatDocumentParamsSchema),
+  asyncHandler(controller.removeDocument),
+);
 
 module.exports = router;

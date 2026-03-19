@@ -41,3 +41,6 @@ devtools/tunnel/logs
 # Tunnel Runtimes
 dev-runtime/
 cloudflared-*
+
+# Internal docs
+/docs/rag.md

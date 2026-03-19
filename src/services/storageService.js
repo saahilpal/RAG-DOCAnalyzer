@@ -34,6 +34,19 @@ async function uploadDocumentBuffer({ userId, originalName, buffer, mimeType }) 
   };
 }
 
+async function downloadDocumentBuffer(storagePath) {
+  const { data, error } = await supabase.storage.from(env.supabaseStorageBucket).download(storagePath);
+
+  if (error || !data) {
+    throw new AppError(502, 'STORAGE_DOWNLOAD_FAILED', 'Failed to download file from Supabase Storage.', {
+      message: error?.message || 'Missing storage object.',
+    });
+  }
+
+  const arrayBuffer = await data.arrayBuffer();
+  return Buffer.from(arrayBuffer);
+}
+
 async function deleteDocumentObject(storagePath) {
   if (!storagePath) {
     return;
@@ -49,5 +62,6 @@ async function deleteDocumentObject(storagePath) {
 
 module.exports = {
   uploadDocumentBuffer,
+  downloadDocumentBuffer,
   deleteDocumentObject,
 };

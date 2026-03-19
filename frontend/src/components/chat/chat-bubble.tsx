@@ -11,10 +11,9 @@ type ChatBubbleProps = {
   role: 'user' | 'assistant';
   content: string;
   timestamp?: string;
-  fallbackUsed?: boolean;
 };
 
-export function ChatBubble({ role, content, timestamp, fallbackUsed = false }: ChatBubbleProps) {
+export function ChatBubble({ role, content, timestamp }: ChatBubbleProps) {
   const isUser = role === 'user';
 
   return (

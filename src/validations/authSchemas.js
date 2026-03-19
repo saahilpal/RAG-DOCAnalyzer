@@ -1,31 +1,23 @@
 const { z } = require('zod');
 
 const emailSchema = z.string().trim().toLowerCase().email().max(255);
-const passwordSchema = z.string().min(8).max(128);
+const otpSchema = z.string().trim().regex(/^\d{6}$/, 'OTP must be a 6-digit code.');
 
-const registerSchema = z.object({
-  email: emailSchema,
-  password: passwordSchema,
-});
-
-const loginSchema = z.object({
-  email: emailSchema,
-  password: passwordSchema,
-});
-
-const forgotPasswordSchema = z.object({
+const requestOtpSchema = z.object({
   email: emailSchema,
 });
 
-const resetPasswordSchema = z.object({
+const resendOtpSchema = z.object({
   email: emailSchema,
-  otp: z.string().length(6),
-  newPassword: passwordSchema,
+});
+
+const verifyOtpSchema = z.object({
+  email: emailSchema,
+  otp: otpSchema,
 });
 
 module.exports = {
-  registerSchema,
-  loginSchema,
-  forgotPasswordSchema,
-  resetPasswordSchema,
+  requestOtpSchema,
+  resendOtpSchema,
+  verifyOtpSchema,
 };

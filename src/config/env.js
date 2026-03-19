@@ -24,6 +24,12 @@ const envSchema = z.object({
   JWT_SECRET: z.string().min(32),
   JWT_EXPIRES_IN: z.string().default('7d'),
   AUTH_COOKIE_NAME: z.string().default('doc_analyzer_token'),
+  OTP_EXPIRY_SECONDS: z.coerce.number().int().positive().default(300),
+  OTP_RESEND_COOLDOWN_SECONDS: z.coerce.number().int().positive().default(60),
+  OTP_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
+  OTP_MAX_REQUESTS_PER_HOUR: z.coerce.number().int().positive().default(6),
+  OTP_REQUEST_IP_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(30),
+  OTP_VERIFY_IP_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(40),
 
   CORS_ORIGIN: z.string().min(1),
   RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(15 * 60 * 1000),
@@ -37,20 +43,26 @@ const envSchema = z.object({
   MAX_UPLOAD_FILE_SIZE_BYTES: z.coerce.number().int().positive().optional(),
   MAX_PAGES_PER_DOC: z.coerce.number().int().positive().default(40),
   MAX_CHUNKS_PER_DOC: z.coerce.number().int().positive().default(200),
-  MAX_CONTEXT_CHUNKS: z.coerce.number().int().positive().default(4),
+  MAX_DOCS_PER_CHAT: z.coerce.number().int().positive().default(3),
   MAX_CHAT_REQUESTS_PER_DAY: z.coerce.number().int().positive().default(20),
-  MAX_DOCS_PER_USER: z.coerce.number().int().positive().default(3),
-  CACHE_TTL_SECONDS: z.coerce.number().int().positive().default(600),
-
-  RAG_TOP_K: z.coerce.number().int().positive().optional(),
-  RAG_CANDIDATE_PAGE_SIZE: z.coerce.number().int().positive().default(400),
-  RAG_HISTORY_LIMIT: z.coerce.number().int().positive().default(50),
+  CHAT_HISTORY_LIMIT: z.coerce.number().int().positive().default(8),
+  CHAT_MESSAGE_LIST_LIMIT: z.coerce.number().int().positive().default(200),
+  RAG_TOP_K: z.coerce.number().int().positive().default(6),
+  RAG_CANDIDATE_PAGE_SIZE: z.coerce.number().int().positive().default(24),
   RAG_TOKEN_TO_CHAR_RATIO: z.coerce.number().positive().default(4),
-  RAG_CHUNK_TOKENS: z.coerce.number().int().positive().optional(),
-  RAG_CHUNK_OVERLAP_TOKENS: z.coerce.number().int().nonnegative().optional(),
+  RAG_CHUNK_TOKENS: z.coerce.number().int().positive().default(1000),
+  RAG_CHUNK_OVERLAP_TOKENS: z.coerce.number().int().nonnegative().default(200),
 
-  CHUNK_SIZE_TOKENS: z.coerce.number().int().positive().default(450),
-  CHUNK_OVERLAP_TOKENS: z.coerce.number().int().nonnegative().default(80),
+  ENABLE_DOCUMENT_WORKER: z
+    .union([z.boolean(), z.string()])
+    .optional()
+    .transform((value) => {
+      if (typeof value === 'boolean') return value;
+      if (value == null) return true;
+      return !['0', 'false', 'no', 'off'].includes(String(value).toLowerCase());
+    }),
+  WORKER_POLL_INTERVAL_MS: z.coerce.number().int().positive().default(1_000),
+  DOCUMENT_PROCESSING_RETRY_AFTER_MS: z.coerce.number().int().positive().default(15 * 60 * 1000),
 
   GITHUB_REPOSITORY_URL: z.string().url().default('https://github.com/saahilpal/RAG-DOCAnalyzer'),
   RUN_LOCALLY_GUIDE_URL: z.string().url().default('https://github.com/saahilpal/RAG-DOCAnalyzer#quick-start'),
@@ -60,6 +72,8 @@ const envSchema = z.object({
   SMTP_USER: z.string().optional(),
   SMTP_PASS: z.string().optional(),
   SMTP_FROM: z.string().optional().default('"DocAnalyzer" <noreply@example.com>'),
+  MAIL_RETRY_ATTEMPTS: z.coerce.number().int().positive().default(3),
+  MAIL_RETRY_BACKOFF_MS: z.coerce.number().int().positive().default(300),
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -73,15 +87,9 @@ if (!parsed.success) {
 
 const env = parsed.data;
 
-const ragTopK = env.RAG_TOP_K || env.MAX_CONTEXT_CHUNKS;
-const ragCandidatePageSize = Math.max(env.RAG_CANDIDATE_PAGE_SIZE, ragTopK);
-const ragChunkTokens = env.RAG_CHUNK_TOKENS || env.CHUNK_SIZE_TOKENS;
-const ragChunkOverlapTokens =
-  env.RAG_CHUNK_OVERLAP_TOKENS != null ? env.RAG_CHUNK_OVERLAP_TOKENS : env.CHUNK_OVERLAP_TOKENS;
-
-if (ragChunkOverlapTokens >= ragChunkTokens) {
+if (env.RAG_CHUNK_OVERLAP_TOKENS >= env.RAG_CHUNK_TOKENS) {
   throw new Error(
-    `Invalid environment configuration:\nRAG_CHUNK_OVERLAP_TOKENS must be smaller than RAG_CHUNK_TOKENS.`,
+    'Invalid environment configuration:\nRAG_CHUNK_OVERLAP_TOKENS must be smaller than RAG_CHUNK_TOKENS.',
   );
 }
 
@@ -110,6 +118,12 @@ module.exports = {
   jwtSecret: env.JWT_SECRET,
   jwtExpiresIn: env.JWT_EXPIRES_IN,
   authCookieName: env.AUTH_COOKIE_NAME,
+  otpExpirySeconds: env.OTP_EXPIRY_SECONDS,
+  otpResendCooldownSeconds: env.OTP_RESEND_COOLDOWN_SECONDS,
+  otpMaxAttempts: env.OTP_MAX_ATTEMPTS,
+  otpMaxRequestsPerHour: env.OTP_MAX_REQUESTS_PER_HOUR,
+  otpRequestIpRateLimitMax: env.OTP_REQUEST_IP_RATE_LIMIT_MAX,
+  otpVerifyIpRateLimitMax: env.OTP_VERIFY_IP_RATE_LIMIT_MAX,
 
   corsOrigin: env.CORS_ORIGIN,
   rateLimitWindowMs: env.RATE_LIMIT_WINDOW_MS,
@@ -123,20 +137,19 @@ module.exports = {
   maxUploadFileSizeBytes,
   maxPagesPerDoc: env.MAX_PAGES_PER_DOC,
   maxChunksPerDoc: env.MAX_CHUNKS_PER_DOC,
-  maxContextChunks: ragTopK,
+  maxDocsPerChat: env.MAX_DOCS_PER_CHAT,
   maxChatRequestsPerDay: env.MAX_CHAT_REQUESTS_PER_DAY,
-  maxDocsPerUser: env.MAX_DOCS_PER_USER,
-  cacheTtlSeconds: env.CACHE_TTL_SECONDS,
-
-  ragTopK,
-  ragCandidatePageSize,
-  ragHistoryLimit: env.RAG_HISTORY_LIMIT,
+  chatHistoryLimit: env.CHAT_HISTORY_LIMIT,
+  chatMessageListLimit: env.CHAT_MESSAGE_LIST_LIMIT,
+  ragTopK: env.RAG_TOP_K,
+  ragCandidatePageSize: Math.max(env.RAG_CANDIDATE_PAGE_SIZE, env.RAG_TOP_K),
   ragTokenToCharRatio: env.RAG_TOKEN_TO_CHAR_RATIO,
-  ragChunkTokens,
-  ragChunkOverlapTokens,
+  chunkSizeTokens: env.RAG_CHUNK_TOKENS,
+  chunkOverlapTokens: env.RAG_CHUNK_OVERLAP_TOKENS,
 
-  chunkSizeTokens: ragChunkTokens,
-  chunkOverlapTokens: ragChunkOverlapTokens,
+  enableDocumentWorker: env.ENABLE_DOCUMENT_WORKER,
+  workerPollIntervalMs: env.WORKER_POLL_INTERVAL_MS,
+  documentProcessingRetryAfterMs: env.DOCUMENT_PROCESSING_RETRY_AFTER_MS,
 
   githubRepositoryUrl: env.GITHUB_REPOSITORY_URL,
   runLocallyGuideUrl: env.RUN_LOCALLY_GUIDE_URL,
@@ -147,5 +160,7 @@ module.exports = {
     user: env.SMTP_USER,
     pass: env.SMTP_PASS,
     from: env.SMTP_FROM,
+    retryAttempts: env.MAIL_RETRY_ATTEMPTS,
+    retryBackoffMs: env.MAIL_RETRY_BACKOFF_MS,
   },
 };

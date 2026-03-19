@@ -49,7 +49,7 @@ export function UploadDropzone({
     }
 
     if (file.size > maxFileSizeBytes) {
-      reportError(`File exceeds ${maxFileSizeMb}MB demo limit.`);
+      reportError(`File exceeds the ${maxFileSizeMb}MB upload limit.`);
       return;
     }
 
@@ -85,7 +85,7 @@ export function UploadDropzone({
       </div>
       <h3 className="text-base font-semibold text-neutral-900">Drag and drop your PDF here</h3>
       <p className="mt-1 text-sm text-neutral-500">
-        or upload manually from your device ({maxFileSizeMb}MB max in demo mode)
+        or upload manually from your device ({maxFileSizeMb}MB max)
       </p>
 
       <div className="mt-5 flex justify-center">

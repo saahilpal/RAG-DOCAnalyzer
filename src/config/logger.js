@@ -11,17 +11,21 @@ function write(level, message, meta = null) {
   const line = JSON.stringify(payload);
 
   if (level === 'error') {
-    console.error(line);
+    process.stderr.write(`${line}\n`);
     return;
   }
 
   if (!env.isProduction || level !== 'debug') {
-    console.log(line);
+    process.stdout.write(`${line}\n`);
   }
 }
 
 function info(message, meta) {
   write('info', message, meta);
+}
+
+function warn(message, meta) {
+  write('warn', message, meta);
 }
 
 function error(message, meta) {
@@ -34,6 +38,7 @@ function debug(message, meta) {
 
 module.exports = {
   info,
+  warn,
   error,
   debug,
 };

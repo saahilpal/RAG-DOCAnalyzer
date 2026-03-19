@@ -1,115 +1,164 @@
+const logger = require('../config/logger');
+const env = require('../config/env');
 const { ok } = require('../utils/apiResponse');
 const { initSse, sendEvent, endSse } = require('../utils/sse');
-const { getOwnedDocument } = require('../services/documentService');
-const {
-  ensureSession,
-  saveMessage,
-  listSessions,
-  listSessionMessages,
-} = require('../services/sessionService');
-const { streamRagAnswer } = require('../services/ragService');
-const env = require('../config/env');
-const {
-  consumeUserChatQuota,
-  refundUserChatQuota,
-  getRemainingChatRequests,
-  getTodayChatUsage,
-} = require('../services/quotaService');
-const { noDocumentContext } = require('../utils/errors');
+const { AppError } = require('../utils/errors');
+const chatService = require('../services/chatService');
+const documentService = require('../services/documentService');
+const ragService = require('../services/ragService');
+const quotaService = require('../services/quotaService');
 
-async function stream(req, res, next) {
+async function listChats(req, res) {
+  const chats = await chatService.listChats({
+    userId: req.auth.userId,
+    limit: req.query.limit,
+  });
+
+  return ok(res, { chats });
+}
+
+async function createChat(req, res) {
+  const chat = await chatService.createChat({
+    userId: req.auth.userId,
+    title: req.body.title,
+  });
+
+  return ok(res, { chat }, 201);
+}
+
+async function getChat(req, res) {
+  const chat = await chatService.getOwnedChat({
+    userId: req.auth.userId,
+    chatId: req.params.chatId,
+  });
+
+  return ok(res, { chat });
+}
+
+async function listMessages(req, res) {
+  const messages = await chatService.listChatMessages({
+    userId: req.auth.userId,
+    chatId: req.params.chatId,
+    limit: req.query.limit || env.chatMessageListLimit,
+  });
+
+  return ok(res, { messages });
+}
+
+async function listDocuments(req, res) {
+  const documents = await documentService.listChatDocuments({
+    userId: req.auth.userId,
+    chatId: req.params.chatId,
+  });
+
+  return ok(res, { documents });
+}
+
+async function uploadDocument(req, res) {
+  const document = await documentService.attachDocumentToChat({
+    userId: req.auth.userId,
+    chatId: req.params.chatId,
+    file: req.file,
+  });
+
+  return ok(res, { document }, 201);
+}
+
+async function removeDocument(req, res) {
+  const deleted = await documentService.removeDocumentFromChat({
+    userId: req.auth.userId,
+    chatId: req.params.chatId,
+    documentId: req.params.documentId,
+  });
+
+  return ok(res, { deleted });
+}
+
+async function streamMessage(req, res, next) {
   const userId = req.auth.userId;
-  const { sessionId, documentId, query } = req.body;
-
-  if (!documentId) {
-    return next(noDocumentContext());
-  }
+  const chatId = req.params.chatId;
+  const { content, clientMessageId } = req.body;
 
   let streamStarted = false;
-  let quotaConsumed = false;
   let clientDisconnected = false;
+  let userMessageId = null;
 
   req.on('close', () => {
     clientDisconnected = true;
   });
 
   try {
-    await getOwnedDocument({ userId, documentId });
+    await chatService.getOwnedChat({ userId, chatId });
+    await quotaService.assertUserChatQuotaAvailable(userId);
 
-    const session = await ensureSession({
+    const attachedDocuments = await documentService.listChatDocuments({ userId, chatId });
+    const indexedDocuments = attachedDocuments.filter((document) => document.status === 'indexed');
+    const history = await chatService.getRecentChatMessages({
       userId,
-      sessionId,
-      documentId,
-      query,
+      chatId,
+      limit: env.chatHistoryLimit,
     });
 
-    const quota = await consumeUserChatQuota(userId);
-    quotaConsumed = true;
+    if (attachedDocuments.length > 0 && indexedDocuments.length === 0) {
+      throw new AppError(
+        409,
+        'DOCUMENTS_NOT_READY',
+        'Attached documents are still processing. Please wait until at least one document is ready.',
+      );
+    }
 
-    await saveMessage({
-      sessionId: session.id,
-      role: 'user',
-      content: query,
+    const userMessage = await chatService.createUserMessage({
+      userId,
+      chatId,
+      content,
+      clientMessageId,
     });
+    userMessageId = userMessage.id;
+
+    if (clientDisconnected) {
+      return;
+    }
 
     initSse(res);
     streamStarted = true;
 
-    sendEvent(res, 'session', {
-      sessionId: session.id,
-      documentId: session.document_id,
-      daily_limit: quota.limit,
-      daily_remaining: quota.remaining,
+    sendEvent(res, 'chat.meta', {
+      chatId,
+      userMessageId,
     });
 
-    const generation = await streamRagAnswer({
+    const generation = await ragService.streamAssistantReply({
       userId,
-      documentId,
-      query,
+      chatId,
+      history,
+      indexedDocuments,
+      userMessage: content,
       shouldAbort: () => clientDisconnected,
       onToken: (token) => {
         if (!clientDisconnected) {
-          sendEvent(res, 'token', { text: token });
+          sendEvent(res, 'assistant.delta', { text: token });
         }
       },
     });
 
-    const assistantMessage = await saveMessage({
-      sessionId: session.id,
-      role: 'assistant',
+    if (clientDisconnected) {
+      return;
+    }
+
+    const completion = await chatService.saveAssistantMessageAndConsumeQuota({
+      userId,
+      chatId,
       content: generation.answer,
-      fallbackUsed: generation.fallbackUsed,
     });
 
-    if (!clientDisconnected) {
-      sendEvent(res, 'done', {
-        sessionId: session.id,
-        messageId: assistantMessage.id,
-        retrievedChunks: generation.chunks.length,
-        fallback_used: generation.fallbackUsed,
-        cached: generation.cached,
-        ai_error_code: generation.aiErrorCode,
-        daily_limit: quota.limit,
-        daily_remaining: quota.remaining,
-      });
-      endSse(res);
-    }
-  } catch (error) {
-    if (quotaConsumed && !clientDisconnected) {
-      try {
-        await refundUserChatQuota(userId);
-      } catch (refundError) {
-        logger.error('Failed to refund quota after error', {
-          userId,
-          message: refundError.message,
-        });
-      }
-    }
+    sendEvent(res, 'assistant.completed', {
+      assistantMessage: completion.message,
+      quota: completion.quota,
+    });
 
+    endSse(res);
+  } catch (error) {
     if (error?.code === 'CLIENT_DISCONNECTED') {
-      if (!clientDisconnected && !res.writableEnded) {
-        endSse(res);
-      }
       return;
     }
 
@@ -117,38 +166,27 @@ async function stream(req, res, next) {
       return next(error);
     }
 
-    sendEvent(res, 'error', {
-      code: error.code || 'STREAM_ERROR',
-      message: error.message || 'Failed to stream response.',
-      details: error.details || null,
+    logger.warn('Streaming message failed', {
+      chatId,
+      userId,
+      userMessageId,
+      code: error.code,
+      message: error.message,
     });
 
-    return endSse(res);
+    if (!res.writableEnded) {
+      sendEvent(res, 'error', {
+        code: error.code || 'STREAM_ABORTED',
+        message: error.message || 'Failed to stream response.',
+      });
+      endSse(res);
+    }
   }
 }
 
-async function sessions(req, res) {
-  const rows = await listSessions({
-    userId: req.auth.userId,
-    documentId: req.query.documentId || null,
-    limit: req.query.limit || env.ragHistoryLimit,
-  });
-
-  return ok(res, { sessions: rows });
-}
-
-async function messages(req, res) {
-  const rows = await listSessionMessages({
-    userId: req.auth.userId,
-    sessionId: req.params.sessionId,
-  });
-
-  return ok(res, { messages: rows });
-}
-
 async function quota(req, res) {
-  const used = await getTodayChatUsage(req.auth.userId);
-  const remaining = getRemainingChatRequests(used);
+  const used = await quotaService.getTodayChatUsage(req.auth.userId);
+  const remaining = quotaService.getRemainingChatRequests(used);
 
   return ok(res, {
     quota: {
@@ -160,8 +198,13 @@ async function quota(req, res) {
 }
 
 module.exports = {
-  stream,
-  sessions,
-  messages,
+  listChats,
+  createChat,
+  getChat,
+  listMessages,
+  listDocuments,
+  uploadDocument,
+  removeDocument,
+  streamMessage,
   quota,
 };

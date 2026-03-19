@@ -24,7 +24,7 @@ async function ready(_req, res) {
   if (!status.ai) {
     return ok(res, {
       status: 'ready_degraded',
-      mode: 'fallback',
+      mode: 'chat_only',
       database: status.database,
       ai: status.ai,
       timestamp: new Date().toISOString(),
@@ -42,22 +42,26 @@ async function ready(_req, res) {
 
 function limits(_req, res) {
   return ok(res, {
-    philosophy: 'This public demo runs on free-tier AI APIs, so usage limits apply.',
+    philosophy: 'Chat-first RAG workspace with lightweight attachments and predictable operating limits.',
     retrievalMode: env.retrievalMode,
+    workerEnabled: env.enableDocumentWorker,
     limits: {
       maxFileSizeMb: env.maxFileSizeMb,
       maxPagesPerDoc: env.maxPagesPerDoc,
       maxChunksPerDoc: env.maxChunksPerDoc,
-      maxContextChunks: env.maxContextChunks,
+      maxDocsPerChat: env.maxDocsPerChat,
+      maxChatRequestsPerDay: env.maxChatRequestsPerDay,
+      chatHistoryLimit: env.chatHistoryLimit,
+      chatMessageListLimit: env.chatMessageListLimit,
       ragTopK: env.ragTopK,
       ragCandidatePageSize: env.ragCandidatePageSize,
-      ragHistoryLimit: env.ragHistoryLimit,
-      ragTokenToCharRatio: env.ragTokenToCharRatio,
-      ragChunkTokens: env.ragChunkTokens,
-      ragChunkOverlapTokens: env.ragChunkOverlapTokens,
-      maxChatRequestsPerDay: env.maxChatRequestsPerDay,
-      maxDocsPerUser: env.maxDocsPerUser,
-      cacheTtlSeconds: env.cacheTtlSeconds,
+      workerPollIntervalMs: env.workerPollIntervalMs,
+      otpExpiresInSeconds: env.otpExpirySeconds,
+      otpResendCooldownSeconds: env.otpResendCooldownSeconds,
+      otpMaxAttempts: env.otpMaxAttempts,
+      otpMaxRequestsPerHour: env.otpMaxRequestsPerHour,
+      otpRequestIpRateLimitMax: env.otpRequestIpRateLimitMax,
+      otpVerifyIpRateLimitMax: env.otpVerifyIpRateLimitMax,
     },
     links: {
       githubRepositoryUrl: env.githubRepositoryUrl,

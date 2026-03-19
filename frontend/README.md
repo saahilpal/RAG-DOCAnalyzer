@@ -1,21 +1,19 @@
 # Document Analyzer RAG Frontend
 
-Premium monochrome Next.js UI for a free-tier-safe RAG demo.
+Next.js frontend for the chat-first RAG product.
 
 ## Pages
 
-- `/` Landing page with transparency notice, source links, and run-local guide
-- `/login` Login
-- `/signup` Signup
-- `/app` Three-panel chat dashboard
-- `/app/documents` Document manager
-- `/app/settings` Limits + health + source links
+- `/` Marketing and product overview
+- `/login` OTP sign-in
+- `/app` Main chat workspace
+- `/app/settings` Workspace diagnostics and links
 
-## UI Stack
+## Stack
 
 - Next.js App Router
 - TypeScript
-- TailwindCSS
+- Tailwind CSS
 - Framer Motion
 - Lucide React
 
@@ -27,11 +25,7 @@ cp .env.example .env.local
 
 Required:
 
-- `NEXT_PUBLIC_API_URL` (example: `http://localhost:4000`)
-
-Vercel config:
-
-- [`vercel.json`](./vercel.json)
+- `NEXT_PUBLIC_API_URL`
 
 ## Development
 
@@ -43,6 +37,7 @@ npm run dev
 ## Verification
 
 ```bash
+npm run test
 npm run lint
 npm run build
 ```

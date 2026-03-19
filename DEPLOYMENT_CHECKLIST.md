@@ -11,7 +11,7 @@ Follow these exact steps to deploy a production-ready instance of **RAG-DOCAnaly
 3.  **Google AI Studio API Key**: For Gemini generation and embeddings.
 4.  **Render Account**: To host the Node.js Express Backend.
 5.  **Vercel Account**: To host the Next.js Frontend.
-6.  **SMTP Provider** (Optional but recommended): For Password Reset emails (e.g., Resend, SendGrid, Gmail).
+6.  **SMTP Provider** (Required for OTP delivery): For verification emails (e.g., Resend, SendGrid, Gmail).
 
 ---
 
@@ -52,7 +52,7 @@ Follow these exact steps to deploy a production-ready instance of **RAG-DOCAnaly
     *   `GEMINI_API_KEY`: (Your Google Gemini API Key)
     *   `JWT_SECRET`: (A long, random string for auth security)
     *   `CORS_ORIGIN`: (Initially `*` or your Vercel URL once deployed)
-    *   `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`: (Your email provider details for password reset)
+    *   `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`: (Your email provider details for OTP delivery)
 4.  **Wait for Deployment**: Render will build and deploy your backend. Note your service URL (e.g., `https://backend.onrender.com`).
 
 ---
@@ -83,12 +83,11 @@ Follow these exact steps to deploy a production-ready instance of **RAG-DOCAnaly
 
 ## Step 5: Post-Deployment Verification
 
-1.  **Health Check**: Visit `https://your-backend.onrender.com/api/health/live` (should see `{ "ok": true }`).
-2.  **Ready Check**: Visit `https://your-backend.onrender.com/api/health/ready` (should see `status: ready`).
-3.  **Sign Up**: Create an account on your deployed frontend.
+1.  **Health Check**: Visit `https://your-backend.onrender.com/api/v1/health/live` (should see `{ "ok": true }`).
+2.  **Ready Check**: Visit `https://your-backend.onrender.com/api/v1/health/ready` (should see `status: ready`).
+3.  **OTP Sign-In**: Request a verification code from the deployed frontend and verify that the code arrives by email.
 4.  **Upload**: Upload a PDF and wait for indexing.
 5.  **Chat**: Ask a question and ensure tokens stream back via SSE.
-6.  **Password Reset**: Test the "Forgot Password" flow if SMTP is configured.
 
 ---
 
@@ -97,4 +96,4 @@ Follow these exact steps to deploy a production-ready instance of **RAG-DOCAnaly
 *   **Database Errors**: Ensure you used the `service_role` key, not the `anon` key.
 *   **Upload Fails**: Check if the `documents` bucket exists and is public in Supabase Storage.
 *   **CORS Issues**: Double-check `CORS_ORIGIN` in Render matches your Vercel URL exactly (no trailing slash).
-*   **AI Timeouts**: If using Gemini's free tier, you may hit rate limits. The system will automatically use extractive fallback in these cases.
+*   **AI Timeouts**: Review your Gemini quota and timeout settings if generation or embedding requests start failing under load.
