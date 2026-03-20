@@ -1,5 +1,8 @@
-const { ai } = require('../config/gemini');
+const { TaskType } = require('@google/generative-ai');
+
+const { generationModel, embeddingModel } = require('../config/gemini');
 const env = require('../config/env');
+const logger = require('../config/logger');
 const { AppError, badRequest } = require('../utils/errors');
 
 function withTimeout(promise, timeoutMs, timeoutCode = 'AI_TIMEOUT') {
@@ -32,37 +35,59 @@ function mapGeminiError(error) {
   return new AppError(503, 'AI_TEMPORARILY_UNAVAILABLE', 'AI service is temporarily unavailable.');
 }
 
-async function embedTexts(texts) {
+function serializeGeminiError(error) {
+  return {
+    name: error?.name || null,
+    message: error?.message || null,
+    status: error?.status || null,
+    statusText: error?.statusText || null,
+    code: error?.code || null,
+    stack: error?.stack || null,
+    errorDetails: error?.errorDetails || null,
+    cause: error?.cause || null,
+  };
+}
+
+async function embedTexts(texts, options = {}) {
   if (!Array.isArray(texts) || texts.length === 0) {
     return [];
   }
 
   try {
-    const response = await withTimeout(
-      ai.models.embedContent({
-        model: env.geminiEmbeddingModel,
-        contents: texts,
-        config: {
-          outputDimensionality: env.embeddingDimension,
-        },
-      }),
-      env.aiTimeoutMs,
+    logger.info('Gemini embedding request started', {
+      model: env.geminiEmbeddingModel,
+      textCount: texts.length,
+    });
+
+    const taskType = options.taskType || TaskType.RETRIEVAL_DOCUMENT;
+    const responses = await Promise.all(
+      texts.map((text) =>
+        withTimeout(
+          embeddingModel.embedContent({
+            content: {
+              role: 'user',
+              parts: [{ text }],
+            },
+            taskType,
+          }),
+          env.aiTimeoutMs,
+          'EMBEDDING_TIMEOUT',
+        ),
+      ),
     );
 
-    const embeddings = response?.embeddings || [];
-
-    if (embeddings.length !== texts.length) {
-      throw new AppError(502, 'EMBEDDING_ERROR', 'Embedding response size mismatch.');
-    }
-
-    return embeddings.map((item) => {
-      const values = item?.values;
+    return responses.map((item) => {
+      const values = item?.embedding?.values;
       if (!Array.isArray(values) || values.length !== env.embeddingDimension) {
         throw badRequest(`Gemini embedding dimension is invalid. Expected ${env.embeddingDimension}.`);
       }
       return values;
     });
   } catch (error) {
+    logger.error('Gemini embedding request failed', {
+      model: env.geminiEmbeddingModel,
+      error: serializeGeminiError(error),
+    });
     throw mapGeminiError(error);
   }
 }
@@ -71,36 +96,54 @@ async function* streamGeneration(prompt, options = {}) {
   const { shouldAbort } = options;
 
   try {
-    const stream = await withTimeout(
-      ai.models.generateContentStream({
-        model: env.geminiModel,
-        contents: prompt,
+    logger.info('Gemini generation request started', {
+      model: env.geminiModel,
+    });
+
+    const result = await withTimeout(
+      generationModel.generateContent({
+        contents: [
+          {
+            role: 'user',
+            parts: [{ text: prompt }],
+          },
+        ],
       }),
       env.aiTimeoutMs,
     );
 
-    for await (const chunk of stream) {
-      if (typeof shouldAbort === 'function' && shouldAbort()) {
-        throw new AppError(499, 'CLIENT_DISCONNECTED', 'Client disconnected before response completed.');
-      }
+    if (typeof shouldAbort === 'function' && shouldAbort()) {
+      throw new AppError(499, 'CLIENT_DISCONNECTED', 'Client disconnected before response completed.');
+    }
 
-      const text = chunk?.text || '';
-      if (text) {
-        yield text;
-      }
+    const text = result?.response?.text?.() || '';
+    if (text) {
+      yield text;
     }
   } catch (error) {
+    logger.error('Gemini generation request failed', {
+      model: env.geminiModel,
+      error: serializeGeminiError(error),
+    });
     throw mapGeminiError(error);
   }
 }
 
 async function checkGeminiReady() {
   try {
-    const response = await withTimeout(
-      ai.models.generateContent({
-        model: env.geminiModel,
-        contents: 'Reply with OK',
-        config: {
+    logger.info('Gemini readiness check started', {
+      model: env.geminiModel,
+    });
+
+    const result = await withTimeout(
+      generationModel.generateContent({
+        contents: [
+          {
+            role: 'user',
+            parts: [{ text: 'Reply with OK' }],
+          },
+        ],
+        generationConfig: {
           temperature: 0,
           maxOutputTokens: 3,
         },
@@ -108,8 +151,12 @@ async function checkGeminiReady() {
       Math.min(env.aiTimeoutMs, 5_000),
     );
 
-    return Boolean(response?.text);
-  } catch {
+    return Boolean(result?.response?.text?.());
+  } catch (error) {
+    logger.error('Gemini readiness check failed', {
+      model: env.geminiModel,
+      error: serializeGeminiError(error),
+    });
     return false;
   }
 }

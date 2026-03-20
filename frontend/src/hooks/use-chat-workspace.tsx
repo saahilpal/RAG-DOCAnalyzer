@@ -33,15 +33,26 @@ export type AttachmentChip = ChatDocumentRecord & {
   progress?: number;
 };
 
+type ChatPreference = {
+  title?: string;
+  pinned?: boolean;
+  hidden?: boolean;
+};
+
+export type WorkspaceChatRecord = ChatRecord & {
+  originalTitle: string;
+  isPinned: boolean;
+};
+
 type StreamingMessage = {
   role: 'assistant';
   content: string;
 };
 
 type ChatWorkspaceContextValue = {
-  chats: ChatRecord[];
+  chats: WorkspaceChatRecord[];
   activeChatId: string | null;
-  activeChat: ChatRecord | null;
+  activeChat: WorkspaceChatRecord | null;
   serverMessages: MessageRecord[];
   streamingMessage: StreamingMessage | null;
   attachments: AttachmentChip[];
@@ -58,6 +69,9 @@ type ChatWorkspaceContextValue = {
   readyStatus: { database: boolean; ai: boolean; checked: boolean };
   createNewChat: () => Promise<string>;
   selectChat: (chatId: string) => Promise<void>;
+  renameChat: (chatId: string, title: string) => void;
+  deleteChat: (chatId: string) => void;
+  togglePinnedChat: (chatId: string) => void;
   sendMessage: (content: string) => Promise<void>;
   attachFile: (file: File) => Promise<void>;
   removeAttachment: (documentId: string) => Promise<void>;
@@ -67,6 +81,7 @@ type ChatWorkspaceContextValue = {
 const ChatWorkspaceContext = createContext<ChatWorkspaceContextValue | null>(null);
 
 const DEFAULT_REPOSITORY_URL = 'https://github.com/saahilpal/RAG-DOCAnalyzer';
+const CHAT_PREFERENCES_STORAGE_KEY = 'workspace-chat-preferences';
 
 function createTempAttachment(file: File): AttachmentChip {
   const now = new Date().toISOString();
@@ -98,7 +113,8 @@ function randomClientMessageId() {
 export function ChatWorkspaceProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
 
-  const [chats, setChats] = useState<ChatRecord[]>([]);
+  const [serverChats, setServerChats] = useState<ChatRecord[]>([]);
+  const [chatPreferences, setChatPreferences] = useState<Record<string, ChatPreference>>({});
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [serverMessages, setServerMessages] = useState<MessageRecord[]>([]);
   const [streamingMessage, setStreamingMessage] = useState<StreamingMessage | null>(null);
@@ -123,13 +139,52 @@ export function ChatWorkspaceProvider({ children }: { children: React.ReactNode 
   const activeStreamAbortRef = useRef<AbortController | null>(null);
   const activeChatIdRef = useRef<string | null>(null);
 
+  const persistChatPreferences = useCallback(
+    (nextPreferences: Record<string, ChatPreference>) => {
+      if (typeof window === 'undefined' || !user?.id) {
+        return;
+      }
+
+      window.localStorage.setItem(
+        `${CHAT_PREFERENCES_STORAGE_KEY}:${user.id}`,
+        JSON.stringify(nextPreferences),
+      );
+    },
+    [user?.id],
+  );
+
+  const updateChatPreferences = useCallback(
+    (updater: (current: Record<string, ChatPreference>) => Record<string, ChatPreference>) => {
+      setChatPreferences((current) => {
+        const next = updater(current);
+        persistChatPreferences(next);
+        return next;
+      });
+    },
+    [persistChatPreferences],
+  );
+
   useEffect(() => {
     activeChatIdRef.current = activeChatId;
   }, [activeChatId]);
 
+  useEffect(() => {
+    if (typeof window === 'undefined' || !user?.id) {
+      setChatPreferences({});
+      return;
+    }
+
+    try {
+      const stored = window.localStorage.getItem(`${CHAT_PREFERENCES_STORAGE_KEY}:${user.id}`);
+      setChatPreferences(stored ? (JSON.parse(stored) as Record<string, ChatPreference>) : {});
+    } catch {
+      setChatPreferences({});
+    }
+  }, [user?.id]);
+
   const refreshChats = useCallback(async () => {
     if (!user) {
-      setChats([]);
+      setServerChats([]);
       setActiveChatId(null);
       setServerMessages([]);
       setStreamingMessage(null);
@@ -141,7 +196,7 @@ export function ChatWorkspaceProvider({ children }: { children: React.ReactNode 
 
     try {
       const data = await listChats();
-      setChats(data.chats);
+      setServerChats(data.chats);
 
       setActiveChatId((current) => {
         if (current && data.chats.some((chat) => chat.id === current)) {
@@ -252,14 +307,23 @@ export function ChatWorkspaceProvider({ children }: { children: React.ReactNode 
 
   const createNewChat = useCallback(async () => {
     const data = await createChat();
-    setChats((current) => [data.chat, ...current.filter((chat) => chat.id !== data.chat.id)]);
+    setServerChats((current) => [data.chat, ...current.filter((chat) => chat.id !== data.chat.id)]);
+    updateChatPreferences((current) => {
+      if (!current[data.chat.id]) {
+        return current;
+      }
+
+      const next = { ...current };
+      delete next[data.chat.id];
+      return next;
+    });
     setActiveChatId(data.chat.id);
     setServerMessages([]);
     setStreamingMessage(null);
     setAttachments([]);
     setComposerError('');
     return data.chat.id;
-  }, []);
+  }, [updateChatPreferences]);
 
   const selectChat = useCallback(async (chatId: string) => {
     if (activeStreamAbortRef.current) {
@@ -441,9 +505,49 @@ export function ChatWorkspaceProvider({ children }: { children: React.ReactNode 
     await refreshChats();
   }, [attachments, refreshChats]);
 
+  const renameChat = useCallback((chatId: string, title: string) => {
+    const trimmed = title.trim();
+
+    updateChatPreferences((current) => ({
+      ...current,
+      [chatId]: {
+        ...current[chatId],
+        title: trimmed || undefined,
+      },
+    }));
+  }, [updateChatPreferences]);
+
+  const togglePinnedChat = useCallback((chatId: string) => {
+    updateChatPreferences((current) => ({
+      ...current,
+      [chatId]: {
+        ...current[chatId],
+        pinned: !current[chatId]?.pinned,
+      },
+    }));
+  }, [updateChatPreferences]);
+
+  const deleteChat = useCallback((chatId: string) => {
+    updateChatPreferences((current) => ({
+      ...current,
+      [chatId]: {
+        ...current[chatId],
+        hidden: true,
+      },
+    }));
+
+    setServerMessages((current) => (activeChatIdRef.current === chatId ? [] : current));
+    setStreamingMessage((current) => (activeChatIdRef.current === chatId ? null : current));
+    setAttachments((current) =>
+      activeChatIdRef.current === chatId
+        ? current.filter((document) => document.isTemp && document.status === 'failed')
+        : current,
+    );
+  }, [updateChatPreferences]);
+
   useEffect(() => {
     refreshChats().catch(() => {
-      setChats([]);
+      setServerChats([]);
       setActiveChatId(null);
       setServerMessages([]);
       setStreamingMessage(null);
@@ -515,6 +619,41 @@ export function ChatWorkspaceProvider({ children }: { children: React.ReactNode 
     };
   }, []);
 
+  const chats = useMemo<WorkspaceChatRecord[]>(() => {
+    return serverChats
+      .map((chat) => {
+        const preference = chatPreferences[chat.id];
+
+        return {
+          ...chat,
+          originalTitle: chat.title,
+          title: preference?.title?.trim() || chat.title,
+          isPinned: Boolean(preference?.pinned),
+        };
+      })
+      .filter((chat) => !chatPreferences[chat.id]?.hidden)
+      .sort((left, right) => {
+        if (left.isPinned !== right.isPinned) {
+          return left.isPinned ? -1 : 1;
+        }
+
+        return new Date(right.updated_at).getTime() - new Date(left.updated_at).getTime();
+      });
+  }, [chatPreferences, serverChats]);
+
+  useEffect(() => {
+    if (chats.length === 0) {
+      if (activeChatId) {
+        setActiveChatId(null);
+      }
+      return;
+    }
+
+    if (!activeChatId || !chats.some((chat) => chat.id === activeChatId)) {
+      setActiveChatId(chats[0].id);
+    }
+  }, [activeChatId, chats]);
+
   const activeChat = useMemo(
     () => chats.find((chat) => chat.id === activeChatId) || null,
     [activeChatId, chats],
@@ -541,6 +680,9 @@ export function ChatWorkspaceProvider({ children }: { children: React.ReactNode 
       readyStatus,
       createNewChat,
       selectChat,
+      renameChat,
+      deleteChat,
+      togglePinnedChat,
       sendMessage,
       attachFile,
       removeAttachment,
@@ -554,6 +696,7 @@ export function ChatWorkspaceProvider({ children }: { children: React.ReactNode 
       chats,
       composerError,
       createNewChat,
+      deleteChat,
       workspaceLimits,
       workspaceMessage,
       loadingChats,
@@ -563,12 +706,14 @@ export function ChatWorkspaceProvider({ children }: { children: React.ReactNode 
       removeAttachment,
       repositoryUrl,
       retrievalMode,
+      renameChat,
       runLocallyGuideUrl,
       selectChat,
       sendMessage,
       sending,
       serverMessages,
       streamingMessage,
+      togglePinnedChat,
       attachFile,
     ],
   );

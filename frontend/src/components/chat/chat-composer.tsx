@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { Loader2, Paperclip, SendHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/cn';
@@ -34,15 +34,25 @@ export function ChatComposer({
 }: ChatComposerProps) {
   const formRef = useRef<HTMLFormElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   const countedAttachments = attachments.filter(
     (attachment) => !(attachment.isTemp && attachment.status === 'failed'),
   ).length;
 
+  useEffect(() => {
+    if (!textareaRef.current) {
+      return;
+    }
+
+    textareaRef.current.style.height = 'auto';
+    textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+  }, [value]);
+
   return (
     <form
       ref={formRef}
-      className="rounded-[28px] border border-neutral-200 bg-white px-4 py-3 shadow-[0_10px_30px_rgba(16,16,16,0.06)]"
+      className="rounded-[30px] border border-[rgba(255,255,255,0.72)] bg-[rgba(255,251,246,0.92)] px-4 py-3 shadow-[0_20px_60px_rgba(18,14,10,0.12)] backdrop-blur-xl"
       onSubmit={(event) => {
         event.preventDefault();
         if (!value.trim() || disabled || loading) {
@@ -73,12 +83,13 @@ export function ChatComposer({
           size="icon"
           disabled={disabled || loading || countedAttachments >= maxAttachments}
           onClick={() => fileInputRef.current?.click()}
-          className="shrink-0 rounded-full text-neutral-500 hover:text-neutral-900"
+          className="h-11 w-11 shrink-0 rounded-full bg-[rgba(23,20,17,0.04)] text-[var(--muted)] hover:bg-[rgba(23,20,17,0.08)] hover:text-[var(--foreground)]"
         >
           <Paperclip size={18} />
         </Button>
 
         <textarea
+          ref={textareaRef}
           rows={1}
           value={value}
           maxLength={maxLength}
@@ -94,9 +105,9 @@ export function ChatComposer({
             event.target.style.height = 'auto';
             event.target.style.height = `${event.target.scrollHeight}px`;
           }}
-          placeholder="Ask anything, or attach a PDF for grounded answers"
+          placeholder="Message your documents"
           className={cn(
-            'max-h-48 min-h-[44px] flex-1 resize-none bg-transparent py-2 text-[15px] leading-6 text-neutral-900 outline-none placeholder:text-neutral-400',
+            'max-h-48 min-h-[52px] flex-1 resize-none bg-transparent py-2 text-[15px] leading-7 text-[var(--foreground)] outline-none placeholder:text-[var(--muted)]',
             disabled && 'cursor-not-allowed opacity-60',
           )}
         />

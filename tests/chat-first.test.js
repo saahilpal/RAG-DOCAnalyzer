@@ -21,6 +21,7 @@ const documentService = require('../src/services/documentService');
 const ragService = require('../src/services/ragService');
 const quotaService = require('../src/services/quotaService');
 const db = require('../src/database/client');
+const env = require('../src/config/env');
 const storageService = require('../src/services/storageService');
 const geminiService = require('../src/services/geminiService');
 
@@ -270,6 +271,39 @@ test('retrieval failures are raised explicitly as RETRIEVAL_FAILED', async (t) =
       return true;
     },
   );
+});
+
+test('vector retrieval falls back to fts when Gemini embeddings fail', async (t) => {
+  const originalRetrievalMode = env.retrievalMode;
+  env.retrievalMode = 'vector';
+
+  t.mock.method(geminiService, 'embedTexts', async () => {
+    throw new AppError(503, 'AI_TEMPORARILY_UNAVAILABLE', 'Embedding failed.');
+  });
+  t.mock.method(db, 'query', async () => ({
+    rowCount: 1,
+    rows: [
+      {
+        document_id: DOCUMENT_ID,
+        file_name: 'strategy.pdf',
+        chunk_index: 1,
+        content: 'Fallback fts chunk.',
+      },
+    ],
+  }));
+
+  try {
+    const result = await ragService.retrieveRelevantChunks({
+      userId: USER_ID,
+      chatId: CHAT_ID,
+      query: 'What changed?',
+    });
+
+    assert.equal(result.length, 1);
+    assert.equal(result[0].content, 'Fallback fts chunk.');
+  } finally {
+    env.retrievalMode = originalRetrievalMode;
+  }
 });
 
 test('disconnect during stream does not save an assistant message or consume quota', async (t) => {

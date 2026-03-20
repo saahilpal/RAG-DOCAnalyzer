@@ -57,15 +57,29 @@ async function buildChunkRecords(chunks) {
   const embeddings = [];
   const batches = splitIntoBatches(chunks, 24);
 
-  for (const batch of batches) {
-    const vectors = await geminiService.embedTexts(batch.map((chunk) => chunk.content));
-    for (let index = 0; index < batch.length; index += 1) {
-      embeddings.push({
-        chunkIndex: batch[index].chunkIndex,
-        content: batch[index].content,
-        embedding: vectors[index],
-      });
+  try {
+    for (const batch of batches) {
+      const vectors = await geminiService.embedTexts(batch.map((chunk) => chunk.content));
+      for (let index = 0; index < batch.length; index += 1) {
+        embeddings.push({
+          chunkIndex: batch[index].chunkIndex,
+          content: batch[index].content,
+          embedding: vectors[index],
+        });
+      }
     }
+  } catch (error) {
+    logger.warn('Gemini embeddings unavailable, storing chunks without vectors', {
+      model: env.geminiEmbeddingModel,
+      code: error.code,
+      message: error.message,
+    });
+
+    return chunks.map((chunk) => ({
+      chunkIndex: chunk.chunkIndex,
+      content: chunk.content,
+      embedding: null,
+    }));
   }
 
   return embeddings;

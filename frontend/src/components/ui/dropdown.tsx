@@ -21,9 +21,10 @@ export type DropdownItem =
 type DropdownProps = {
   items: DropdownItem[];
   align?: 'left' | 'right';
+  buttonClassName?: string;
 };
 
-export function Dropdown({ items, align = 'right' }: DropdownProps) {
+export function Dropdown({ items, align = 'right', buttonClassName }: DropdownProps) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
@@ -48,7 +49,10 @@ export function Dropdown({ items, align = 'right' }: DropdownProps) {
       <button
         type="button"
         onClick={() => setOpen((prev) => !prev)}
-        className="rounded-lg border border-neutral-200 p-2 text-neutral-600 transition hover:bg-neutral-100"
+        className={cn(
+          'rounded-xl border border-transparent p-2 text-[var(--muted)] transition hover:bg-[rgba(255,255,255,0.08)] hover:text-[var(--foreground)]',
+          buttonClassName,
+        )}
         aria-label="Open menu"
       >
         <MoreHorizontal size={16} />
@@ -62,7 +66,7 @@ export function Dropdown({ items, align = 'right' }: DropdownProps) {
             exit={{ opacity: 0, y: 2 }}
             transition={transitions.dropdown}
             className={cn(
-              'absolute z-30 mt-2 min-w-48 rounded-xl border border-neutral-200 bg-white py-1 shadow-xl',
+              'absolute z-30 mt-2 min-w-48 rounded-2xl border border-[color:var(--line)] bg-[rgba(255,252,247,0.98)] py-1.5 shadow-[0_18px_48px_rgba(18,14,10,0.16)] backdrop-blur',
               align === 'right' ? 'right-0' : 'left-0',
             )}
           >
@@ -77,11 +81,11 @@ export function Dropdown({ items, align = 'right' }: DropdownProps) {
                   type="button"
                   disabled={item.disabled}
                   className={cn(
-                    'flex w-full items-center px-3 py-2 text-left text-sm transition',
+                    'flex w-full items-center px-3 py-2.5 text-left text-sm transition',
                     item.disabled 
-                      ? 'cursor-default opacity-60 text-neutral-500 font-medium' 
-                      : 'text-neutral-700 hover:bg-neutral-100',
-                    item.destructive && !item.disabled && 'text-red-600',
+                      ? 'cursor-default opacity-60 text-[var(--muted)] font-medium' 
+                      : 'text-[var(--foreground)] hover:bg-[rgba(23,20,17,0.05)]',
+                    item.destructive && !item.disabled && 'text-[#8f2d12]',
                   )}
                   onClick={() => {
                     if (item.onSelect) {

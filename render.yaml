@@ -26,7 +26,7 @@ services:
       - key: GEMINI_API_KEY
         sync: false
       - key: GEMINI_MODEL
-        value: gemini-1.5-flash
+        value: gemini-1.5-flash-latest
       - key: GEMINI_EMBEDDING_MODEL
         value: text-embedding-004
       - key: EMBEDDING_DIMENSION

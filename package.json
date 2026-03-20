@@ -23,7 +23,7 @@
   ],
   "license": "ISC",
   "dependencies": {
-    "@google/genai": "^1.40.0",
+    "@google/generative-ai": "^0.24.1",
     "@supabase/supabase-js": "^2.99.2",
     "bcryptjs": "^2.4.3",
     "cookie-parser": "^1.4.7",

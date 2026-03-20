@@ -330,13 +330,13 @@ export function AuthCard() {
       transition={transitions.pageEnter}
       className="w-full max-w-md"
     >
-      <Card className="p-8">
+      <Card className="rounded-[32px] border-[rgba(255,255,255,0.7)] bg-[rgba(255,251,246,0.88)] p-8 shadow-[0_24px_80px_rgba(18,14,10,0.12)] backdrop-blur-xl">
         <LogoMark className="mb-8" href="/" />
 
-        <h1 className="text-2xl font-semibold tracking-tight text-neutral-900">
+        <h1 className="font-display text-3xl font-semibold tracking-tight text-[var(--foreground)]">
           {step === 'email' ? 'Continue with email' : 'Enter verification code'}
         </h1>
-        <p className="mt-2 text-sm text-neutral-600">
+        <p className="mt-2 text-sm leading-7 text-[var(--muted)]">
           {step === 'email'
             ? 'We will send a secure 6-digit code to your email address. No password required.'
             : `Enter the 6-digit code sent to ${email}. It expires in ${Math.max(1, Math.round(expiresInSeconds / 60))} minutes.`}
@@ -350,7 +350,7 @@ export function AuthCard() {
         {step === 'email' ? (
           <form className="mt-8 space-y-4" onSubmit={handleRequestOtp}>
             <div className="space-y-1.5">
-              <label className="text-sm font-medium text-neutral-700" htmlFor="email">
+              <label className="text-sm font-medium text-[var(--foreground)]" htmlFor="email">
                 Email
               </label>
               <Input
@@ -379,7 +379,7 @@ export function AuthCard() {
 	                  animate={{ opacity: 1, y: 0 }}
 	                  exit={{ opacity: 0, y: -4 }}
 	                  role="alert"
-	                  className="text-sm text-neutral-700"
+	                  className="text-sm text-[#8f2d12]"
 	                >
 	                  {error}
 	                </motion.p>
@@ -393,7 +393,7 @@ export function AuthCard() {
         ) : (
           <div className="mt-8 space-y-5">
             <div className="space-y-1.5">
-              <label className="text-sm font-medium text-neutral-700">Verification code</label>
+              <label className="text-sm font-medium text-[var(--foreground)]">Verification code</label>
               <div className="flex gap-2" onPaste={handleOtpPaste}>
                 {otpDigits.map((digit, index) => (
                   <Input
@@ -412,22 +412,22 @@ export function AuthCard() {
                     inputMode="numeric"
                     autoComplete={index === 0 ? 'one-time-code' : 'off'}
                     maxLength={1}
-                    className="h-14 flex-1 text-center text-xl font-semibold tracking-[0.12em]"
+                    className="h-14 flex-1 rounded-2xl border-[color:var(--line)] bg-[rgba(255,252,247,0.9)] text-center text-xl font-semibold tracking-[0.12em]"
                     aria-label={`Digit ${index + 1}`}
                   />
                 ))}
               </div>
             </div>
 
-	            <div className="flex items-center justify-between gap-3 rounded-2xl border border-neutral-200 bg-neutral-50 px-4 py-3">
-	              <div className="flex items-center gap-2 text-sm text-neutral-600">
+	            <div className="flex items-center justify-between gap-3 rounded-[24px] border border-[color:var(--line)] bg-[rgba(255,252,247,0.88)] px-4 py-3">
+	              <div className="flex items-center gap-2 text-sm text-[var(--muted)]">
 	                <Mail size={16} />
 	                <span aria-live="polite">{notice || 'Check your inbox for the latest code.'}</span>
 	              </div>
 
               <button
                 type="button"
-                className="text-sm font-medium text-neutral-900 disabled:text-neutral-400"
+                className="text-sm font-medium text-[var(--foreground)] disabled:text-[var(--muted)]"
                 disabled={loading || resendCooldownRemaining > 0}
                 onClick={() => {
                   void handleResendOtp();
@@ -445,7 +445,7 @@ export function AuthCard() {
 	                  animate={{ opacity: 1, y: 0 }}
 	                  exit={{ opacity: 0, y: -4 }}
 	                  role="alert"
-	                  className="text-sm text-neutral-700"
+	                  className="text-sm text-[#8f2d12]"
 	                >
 	                  {error}
                 </motion.p>

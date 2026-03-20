@@ -7,10 +7,12 @@ type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger';
 type ButtonSize = 'sm' | 'md' | 'lg' | 'icon';
 
 const variantClasses: Record<ButtonVariant, string> = {
-  primary: 'bg-neutral-900 text-white hover:bg-neutral-800 border border-neutral-900',
-  secondary: 'bg-white text-neutral-900 hover:bg-neutral-100 border border-neutral-200',
-  ghost: 'bg-transparent text-neutral-700 hover:bg-neutral-100 border border-transparent',
-  danger: 'bg-neutral-900 text-white hover:bg-neutral-700 border border-neutral-900',
+  primary:
+    'border border-[var(--foreground)] bg-[var(--foreground)] text-[var(--background-strong)] hover:-translate-y-0.5 hover:bg-[#0f0d0b] hover:shadow-[0_14px_28px_rgba(23,20,17,0.18)]',
+  secondary:
+    'border border-[color:var(--line)] bg-[rgba(255,252,247,0.78)] text-[var(--foreground)] hover:-translate-y-0.5 hover:bg-white hover:shadow-[0_10px_20px_rgba(23,20,17,0.08)]',
+  ghost: 'border border-transparent bg-transparent text-[var(--muted)] hover:bg-[rgba(24,19,13,0.05)] hover:text-[var(--foreground)]',
+  danger: 'border border-[#8f2d12] bg-[#8f2d12] text-white hover:-translate-y-0.5 hover:bg-[#7c240d]',
 };
 
 const sizeClasses: Record<ButtonSize, string> = {
@@ -33,7 +35,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
     <button
       ref={ref}
       className={cn(
-        'inline-flex items-center justify-center gap-2 rounded-xl font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-neutral-400 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50',
+        'inline-flex items-center justify-center gap-2 rounded-2xl font-medium outline-none transition-[transform,background-color,border-color,color,box-shadow] duration-200 focus-visible:ring-2 focus-visible:ring-[rgba(23,20,17,0.18)] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50',
         variantClasses[variant],
         sizeClasses[size],
         className,

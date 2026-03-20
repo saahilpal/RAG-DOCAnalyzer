@@ -95,7 +95,14 @@ async function retrieveFtsChunks({ userId, chatId, query }) {
 }
 
 async function retrieveVectorChunks({ userId, chatId, query }) {
-  const [embedding] = await geminiService.embedTexts([query]);
+  let embedding;
+
+  try {
+    [embedding] = await geminiService.embedTexts([query], { taskType: 'RETRIEVAL_QUERY' });
+  } catch {
+    return retrieveFtsChunks({ userId, chatId, query });
+  }
+
   const vectorLiteral = toVectorLiteral(embedding, env.embeddingDimension);
 
   try {
