@@ -76,7 +76,8 @@ Required backend variables include:
 - `GEMINI_API_KEY`
 - `JWT_SECRET`
 - `CORS_ORIGIN`
-- SMTP credentials for OTP email delivery
+- `RESEND_API_KEY`
+- `RESEND_FROM`
 
 Required frontend variable:
 

@@ -11,7 +11,7 @@ Follow these exact steps to deploy a production-ready instance of **RAG-DOCAnaly
 3.  **Google AI Studio API Key**: For Gemini generation and embeddings.
 4.  **Render Account**: To host the Node.js Express Backend.
 5.  **Vercel Account**: To host the Next.js Frontend.
-6.  **SMTP Provider** (Required for OTP delivery): For verification emails (e.g., Resend, SendGrid, Gmail).
+6.  **Resend Account** (Required for OTP delivery): Create an API key and verify your sending domain.
 
 ---
 
@@ -52,7 +52,8 @@ Follow these exact steps to deploy a production-ready instance of **RAG-DOCAnaly
     *   `GEMINI_API_KEY`: (Your Google Gemini API Key)
     *   `JWT_SECRET`: (A long, random string for auth security)
     *   `CORS_ORIGIN`: (Initially `*` or your Vercel URL once deployed)
-    *   `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`: (Your email provider details for OTP delivery)
+    *   `RESEND_API_KEY`: (Your Resend API key)
+    *   `RESEND_FROM`: (A verified sender, for example `"DocAnalyzer" <noreply@yourdomain.com>`)
 4.  **Wait for Deployment**: Render will build and deploy your backend. Note your service URL (e.g., `https://backend.onrender.com`).
 
 ---

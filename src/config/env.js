@@ -67,11 +67,8 @@ const envSchema = z.object({
   GITHUB_REPOSITORY_URL: z.string().url().default('https://github.com/saahilpal/RAG-DOCAnalyzer'),
   RUN_LOCALLY_GUIDE_URL: z.string().url().default('https://github.com/saahilpal/RAG-DOCAnalyzer#quick-start'),
 
-  SMTP_HOST: z.string().optional(),
-  SMTP_PORT: z.coerce.number().int().positive().optional(),
-  SMTP_USER: z.string().optional(),
-  SMTP_PASS: z.string().optional(),
-  SMTP_FROM: z.string().optional().default('"DocAnalyzer" <noreply@example.com>'),
+  RESEND_API_KEY: z.string().optional(),
+  RESEND_FROM: z.string().optional().default('"DocAnalyzer" <noreply@example.com>'),
   MAIL_RETRY_ATTEMPTS: z.coerce.number().int().positive().default(3),
   MAIL_RETRY_BACKOFF_MS: z.coerce.number().int().positive().default(300),
 });
@@ -154,12 +151,11 @@ module.exports = {
   githubRepositoryUrl: env.GITHUB_REPOSITORY_URL,
   runLocallyGuideUrl: env.RUN_LOCALLY_GUIDE_URL,
 
-  smtp: {
-    host: env.SMTP_HOST,
-    port: env.SMTP_PORT,
-    user: env.SMTP_USER,
-    pass: env.SMTP_PASS,
-    from: env.SMTP_FROM,
+  resend: {
+    apiKey: env.RESEND_API_KEY,
+    from: env.RESEND_FROM,
+  },
+  mail: {
     retryAttempts: env.MAIL_RETRY_ATTEMPTS,
     retryBackoffMs: env.MAIL_RETRY_BACKOFF_MS,
   },

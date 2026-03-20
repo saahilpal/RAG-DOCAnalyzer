@@ -1,8 +1,17 @@
-const nodemailer = require('nodemailer');
+const { randomUUID } = require('node:crypto');
+const { Resend } = require('resend');
 
 const env = require('../config/env');
 const logger = require('../config/logger');
 const { AppError } = require('../utils/errors');
+
+const RETRYABLE_PROVIDER_CODES = new Set(['application_error', 'internal_server_error', 'rate_limit_exceeded']);
+const UNAVAILABLE_PROVIDER_CODES = new Set([
+  'missing_api_key',
+  'invalid_api_key',
+  'restricted_api_key',
+  'invalid_from_address',
+]);
 
 function sleep(ms) {
   return new Promise((resolve) => {
@@ -23,50 +32,101 @@ function createUnavailableMailProvider() {
   };
 }
 
-function createSmtpMailProvider() {
-  const transporter = nodemailer.createTransport({
-    host: env.smtp.host,
-    port: env.smtp.port,
-    secure: env.smtp.port === 465,
-    auth:
-      env.smtp.user && env.smtp.pass
-        ? {
-            user: env.smtp.user,
-            pass: env.smtp.pass,
-          }
-        : undefined,
-  });
+function getProviderErrorCode(error) {
+  return String(error?.providerCode || error?.code || error?.name || error?.cause?.code || '').toLowerCase();
+}
+
+function getProviderStatusCode(error) {
+  const statusCode = Number(error?.providerStatusCode ?? error?.statusCode ?? error?.cause?.statusCode);
+  return Number.isFinite(statusCode) ? statusCode : null;
+}
+
+function isRetryableTransportCode(code) {
+  return ['timeout', 'timedout', 'econnreset', 'econnrefused', 'eai_again', 'enotfound', 'fetch'].some((marker) =>
+    code.includes(marker),
+  );
+}
+
+function normalizeProviderError(error) {
+  if (error instanceof AppError) {
+    error.retryable = false;
+    return error;
+  }
+
+  const providerCode = getProviderErrorCode(error);
+  const providerStatusCode = getProviderStatusCode(error);
+
+  if (UNAVAILABLE_PROVIDER_CODES.has(providerCode)) {
+    const unavailableError = new AppError(
+      503,
+      'EMAIL_DELIVERY_UNAVAILABLE',
+      'Email delivery is not configured right now. Please try again later.',
+    );
+    unavailableError.providerCode = providerCode;
+    unavailableError.providerStatusCode = providerStatusCode;
+    unavailableError.retryable = false;
+    return unavailableError;
+  }
+
+  const normalizedError = new Error(error?.message || 'Email delivery failed.');
+  normalizedError.code = providerCode || 'email_delivery_error';
+  normalizedError.providerCode = providerCode || null;
+  normalizedError.providerStatusCode = providerStatusCode;
+  normalizedError.retryable =
+    providerStatusCode === 429 ||
+    providerStatusCode >= 500 ||
+    RETRYABLE_PROVIDER_CODES.has(providerCode) ||
+    isRetryableTransportCode(providerCode);
+  return normalizedError;
+}
+
+function createResendMailProvider(client = new Resend(env.resend.apiKey), fromAddress = env.resend.from) {
+  const resendClient = client;
 
   return {
-    name: 'smtp',
-    async send({ to, subject, text, html }) {
-      return transporter.sendMail({
-        from: env.smtp.from,
-        to,
-        subject,
-        text,
-        html,
-      });
+    name: 'resend',
+    async send({ to, subject, text, html }, options = {}) {
+      const { data, error } = await resendClient.emails.send(
+        {
+          from: fromAddress,
+          to,
+          subject,
+          text,
+          html,
+        },
+        options.idempotencyKey ? { idempotencyKey: options.idempotencyKey } : undefined,
+      );
+
+      if (error) {
+        throw normalizeProviderError(error);
+      }
+
+      return {
+        messageId: data?.id || null,
+        providerResponse: data || null,
+      };
     },
   };
 }
 
-function createMailProvider() {
-  if (!env.smtp.host || !env.smtp.port) {
+function createMailProvider(config = env.resend, client = null) {
+  if (!config.apiKey || !config.from) {
     return createUnavailableMailProvider();
   }
 
-  return createSmtpMailProvider();
+  return createResendMailProvider(client || new Resend(config.apiKey), config.from);
 }
 
-const provider = createMailProvider();
-
-async function sendMailWithRetry(message) {
+async function sendMailWithRetry(message, options = {}) {
+  const provider = options.provider || createMailProvider();
+  const retryAttempts = options.retryAttempts ?? env.mail.retryAttempts;
+  const retryBackoffMs = options.retryBackoffMs ?? env.mail.retryBackoffMs;
+  const idempotencyKey = options.idempotencyKey || randomUUID();
   let lastError = null;
 
-  for (let attempt = 1; attempt <= env.smtp.retryAttempts; attempt += 1) {
+  for (let attempt = 1; attempt <= retryAttempts; attempt += 1) {
     try {
-      const info = await provider.send(message);
+      const info = await provider.send(message, { idempotencyKey });
 
       logger.info('Email sent', {
         provider: provider.name,
@@ -74,36 +134,46 @@ async function sendMailWithRetry(message) {
         subject: message.subject,
         messageId: info?.messageId || null,
         attempt,
+        idempotencyKey,
       });
 
       return info;
     } catch (error) {
-      lastError = error;
+      const normalizedError = normalizeProviderError(error);
+      lastError = normalizedError;
 
       logger.warn('Email send attempt failed', {
         provider: provider.name,
         to: message.to,
         subject: message.subject,
         attempt,
-        retryAttempts: env.smtp.retryAttempts,
-        code: error.code,
-        message: error.message,
+        retryAttempts,
+        code: getProviderErrorCode(normalizedError),
+        statusCode: getProviderStatusCode(normalizedError),
+        retryable: Boolean(normalizedError.retryable),
+        message: normalizedError.message,
+        idempotencyKey,
       });
 
-      if (error instanceof AppError && error.code === 'EMAIL_DELIVERY_UNAVAILABLE') {
+      if (normalizedError instanceof AppError && normalizedError.code === 'EMAIL_DELIVERY_UNAVAILABLE') {
         logger.error('Email delivery is unavailable', {
           provider: provider.name,
           to: message.to,
           subject: message.subject,
-          code: error.code,
-          message: error.message,
+          code: normalizedError.code,
+          providerCode: getProviderErrorCode(normalizedError),
+          statusCode: getProviderStatusCode(normalizedError),
+          message: normalizedError.message,
+          idempotencyKey,
         });
-        throw error;
+        throw normalizedError;
       }
 
-      if (attempt < env.smtp.retryAttempts) {
-        await sleep(env.smtp.retryBackoffMs * attempt);
+      if (!normalizedError.retryable || attempt >= retryAttempts) {
+        break;
       }
+
+      await sleep(retryBackoffMs * attempt);
     }
   }
 
@@ -111,9 +181,11 @@ async function sendMailWithRetry(message) {
     provider: provider.name,
     to: message.to,
     subject: message.subject,
-    retryAttempts: env.smtp.retryAttempts,
-    code: lastError?.code,
+    retryAttempts,
+    code: getProviderErrorCode(lastError),
+    statusCode: getProviderStatusCode(lastError),
     message: lastError?.message,
+    idempotencyKey,
   });
 
   if (lastError instanceof AppError) {
@@ -155,6 +227,8 @@ async function sendVerificationCodeEmail({ email, otp }) {
 
 module.exports = {
   createMailProvider,
+  createResendMailProvider,
   sendMail,
+  sendMailWithRetry,
   sendVerificationCodeEmail,
 };
