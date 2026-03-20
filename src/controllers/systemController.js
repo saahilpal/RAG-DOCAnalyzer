@@ -44,6 +44,7 @@ function limits(_req, res) {
   return ok(res, {
     philosophy: 'Chat-first RAG workspace with lightweight attachments and predictable operating limits.',
     retrievalMode: env.retrievalMode,
+    model: env.geminiModel,
     workerEnabled: env.enableDocumentWorker,
     limits: {
       maxFileSizeMb: env.maxFileSizeMb,

@@ -1,6 +1,6 @@
 const db = require('../database/client');
 const env = require('../config/env');
-const { AppError, notFound } = require('../utils/errors');
+const { AppError } = require('../utils/errors');
 const quotaService = require('./quotaService');
 
 function buildChatTitle(content) {
@@ -14,9 +14,9 @@ function buildChatTitle(content) {
 
 async function createChat({ userId, title }) {
   const result = await db.query(
-    `INSERT INTO chats (user_id, title)
-     VALUES ($1, $2)
-     RETURNING id, user_id, title, created_at, updated_at`,
+    `INSERT INTO chats (user_id, title, pinned)
+     VALUES ($1, $2, FALSE)
+     RETURNING id, user_id, title, pinned, created_at, updated_at`,
     [userId, title || 'New Chat'],
   );
 
@@ -27,6 +27,7 @@ async function listChats({ userId, limit = 50 }) {
   const result = await db.query(
     `SELECT c.id,
             c.title,
+            c.pinned,
             c.created_at,
             c.updated_at,
             lm.content AS last_message,
@@ -46,7 +47,7 @@ async function listChats({ userId, limit = 50 }) {
        WHERE chat_id = c.id
      ) dc ON TRUE
      WHERE c.user_id = $1
-     ORDER BY c.updated_at DESC
+     ORDER BY c.pinned DESC, c.updated_at DESC
      LIMIT $2`,
     [userId, limit],
   );
@@ -56,7 +57,7 @@ async function listChats({ userId, limit = 50 }) {
 
 async function getOwnedChat({ userId, chatId }) {
   const result = await db.query(
-    `SELECT id, user_id, title, created_at, updated_at
+    `SELECT id, user_id, title, pinned, created_at, updated_at
      FROM chats
      WHERE id = $1 AND user_id = $2
      LIMIT 1`,
@@ -68,6 +69,57 @@ async function getOwnedChat({ userId, chatId }) {
   }
 
   return result.rows[0];
+}
+
+async function updateOwnedChat({ userId, chatId, title, pinned }) {
+  const updates = [];
+  const params = [chatId, userId];
+  let index = 3;
+
+  if (title !== undefined) {
+    updates.push(`title = $${index}`);
+    params.push(title);
+    index += 1;
+  }
+
+  if (pinned !== undefined) {
+    updates.push(`pinned = $${index}`);
+    params.push(Boolean(pinned));
+    index += 1;
+  }
+
+  updates.push('updated_at = NOW()');
+
+  const result = await db.query(
+    `UPDATE chats
+     SET ${updates.join(', ')}
+     WHERE id = $1
+       AND user_id = $2
+     RETURNING id, user_id, title, pinned, created_at, updated_at`,
+    params,
+  );
+
+  if (result.rowCount === 0) {
+    throw new AppError(404, 'CHAT_NOT_FOUND', 'Chat not found.');
+  }
+
+  return result.rows[0];
+}
+
+async function deleteOwnedChat({ userId, chatId }) {
+  const result = await db.query(
+    `DELETE FROM chats
+     WHERE id = $1
+       AND user_id = $2
+     RETURNING id`,
+    [chatId, userId],
+  );
+
+  if (result.rowCount === 0) {
+    throw new AppError(404, 'CHAT_NOT_FOUND', 'Chat not found.');
+  }
+
+  return { id: result.rows[0].id };
 }
 
 async function listChatMessages({ userId, chatId, limit = env.chatMessageListLimit }) {
@@ -173,6 +225,8 @@ module.exports = {
   createChat,
   listChats,
   getOwnedChat,
+  updateOwnedChat,
+  deleteOwnedChat,
   listChatMessages,
   getRecentChatMessages,
   createUserMessage,

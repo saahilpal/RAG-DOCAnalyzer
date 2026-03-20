@@ -11,15 +11,17 @@ import {
 } from 'react';
 import {
   createChat,
+  deleteChat as deleteChatRequest,
   getChatQuota,
-  getWorkspaceLimits,
   getReadyHealth,
+  getWorkspaceLimits,
   isAbortError,
   listChatDocuments,
   listChats,
   listMessages,
   removeChatDocument,
   streamChatMessage,
+  updateChat as updateChatRequest,
   uploadDocumentToChat,
   type ChatDocumentRecord,
   type ChatRecord,
@@ -31,12 +33,6 @@ import { useAuth } from '@/hooks/use-auth';
 export type AttachmentChip = ChatDocumentRecord & {
   isTemp?: boolean;
   progress?: number;
-};
-
-type ChatPreference = {
-  title?: string;
-  pinned?: boolean;
-  hidden?: boolean;
 };
 
 export type WorkspaceChatRecord = ChatRecord & {
@@ -64,14 +60,15 @@ type ChatWorkspaceContextValue = {
   workspaceLimits: WorkspaceLimits | null;
   workspaceMessage: string;
   retrievalMode: 'fts' | 'vector' | null;
+  modelName: string | null;
   repositoryUrl: string;
   runLocallyGuideUrl: string;
   readyStatus: { database: boolean; ai: boolean; checked: boolean };
   createNewChat: () => Promise<string>;
   selectChat: (chatId: string) => Promise<void>;
-  renameChat: (chatId: string, title: string) => void;
-  deleteChat: (chatId: string) => void;
-  togglePinnedChat: (chatId: string) => void;
+  renameChat: (chatId: string, title: string) => Promise<void>;
+  deleteChat: (chatId: string) => Promise<void>;
+  togglePinnedChat: (chatId: string) => Promise<void>;
   sendMessage: (content: string) => Promise<void>;
   attachFile: (file: File) => Promise<void>;
   removeAttachment: (documentId: string) => Promise<void>;
@@ -81,7 +78,6 @@ type ChatWorkspaceContextValue = {
 const ChatWorkspaceContext = createContext<ChatWorkspaceContextValue | null>(null);
 
 const DEFAULT_REPOSITORY_URL = 'https://github.com/saahilpal/RAG-DOCAnalyzer';
-const CHAT_PREFERENCES_STORAGE_KEY = 'workspace-chat-preferences';
 
 function createTempAttachment(file: File): AttachmentChip {
   const now = new Date().toISOString();
@@ -114,7 +110,6 @@ export function ChatWorkspaceProvider({ children }: { children: React.ReactNode 
   const { user } = useAuth();
 
   const [serverChats, setServerChats] = useState<ChatRecord[]>([]);
-  const [chatPreferences, setChatPreferences] = useState<Record<string, ChatPreference>>({});
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [serverMessages, setServerMessages] = useState<MessageRecord[]>([]);
   const [streamingMessage, setStreamingMessage] = useState<StreamingMessage | null>(null);
@@ -129,6 +124,7 @@ export function ChatWorkspaceProvider({ children }: { children: React.ReactNode 
     'Chat-first RAG workspace with lightweight attachments and predictable operating limits.',
   );
   const [retrievalMode, setRetrievalMode] = useState<'fts' | 'vector' | null>(null);
+  const [modelName, setModelName] = useState<string | null>(null);
   const [repositoryUrl, setRepositoryUrl] = useState(DEFAULT_REPOSITORY_URL);
   const [runLocallyGuideUrl, setRunLocallyGuideUrl] = useState(`${DEFAULT_REPOSITORY_URL}#quick-start`);
   const [readyStatus, setReadyStatus] = useState({ database: false, ai: false, checked: false });
@@ -139,48 +135,9 @@ export function ChatWorkspaceProvider({ children }: { children: React.ReactNode 
   const activeStreamAbortRef = useRef<AbortController | null>(null);
   const activeChatIdRef = useRef<string | null>(null);
 
-  const persistChatPreferences = useCallback(
-    (nextPreferences: Record<string, ChatPreference>) => {
-      if (typeof window === 'undefined' || !user?.id) {
-        return;
-      }
-
-      window.localStorage.setItem(
-        `${CHAT_PREFERENCES_STORAGE_KEY}:${user.id}`,
-        JSON.stringify(nextPreferences),
-      );
-    },
-    [user?.id],
-  );
-
-  const updateChatPreferences = useCallback(
-    (updater: (current: Record<string, ChatPreference>) => Record<string, ChatPreference>) => {
-      setChatPreferences((current) => {
-        const next = updater(current);
-        persistChatPreferences(next);
-        return next;
-      });
-    },
-    [persistChatPreferences],
-  );
-
   useEffect(() => {
     activeChatIdRef.current = activeChatId;
   }, [activeChatId]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined' || !user?.id) {
-      setChatPreferences({});
-      return;
-    }
-
-    try {
-      const stored = window.localStorage.getItem(`${CHAT_PREFERENCES_STORAGE_KEY}:${user.id}`);
-      setChatPreferences(stored ? (JSON.parse(stored) as Record<string, ChatPreference>) : {});
-    } catch {
-      setChatPreferences({});
-    }
-  }, [user?.id]);
 
   const refreshChats = useCallback(async () => {
     if (!user) {
@@ -231,6 +188,7 @@ export function ChatWorkspaceProvider({ children }: { children: React.ReactNode 
       setWorkspaceLimits(limitsResult.value.limits);
       setWorkspaceMessage(limitsResult.value.philosophy);
       setRetrievalMode(limitsResult.value.retrievalMode);
+      setModelName(limitsResult.value.model || null);
       setRepositoryUrl(limitsResult.value.links.githubRepositoryUrl || DEFAULT_REPOSITORY_URL);
       setRunLocallyGuideUrl(
         limitsResult.value.links.runLocallyGuideUrl || `${DEFAULT_REPOSITORY_URL}#quick-start`,
@@ -252,78 +210,72 @@ export function ChatWorkspaceProvider({ children }: { children: React.ReactNode 
     }
   }, []);
 
-  const loadThread = useCallback(async (chatId: string) => {
-    if (!user) {
-      setServerMessages([]);
-      setAttachments([]);
-      return;
-    }
-
-    const token = activeLoadTokenRef.current + 1;
-    activeLoadAbortRef.current?.abort();
-    const controller = new AbortController();
-    activeLoadAbortRef.current = controller;
-    activeLoadTokenRef.current = token;
-    setLoadingThread(true);
-    setComposerError('');
-
-    try {
-      const [messageData, documentData] = await Promise.all([
-        listMessages(chatId, 200, controller.signal),
-        listChatDocuments(chatId, controller.signal),
-      ]);
-
-      if (token !== activeLoadTokenRef.current || activeChatIdRef.current !== chatId) {
+  const loadThread = useCallback(
+    async (chatId: string) => {
+      if (!user) {
+        setServerMessages([]);
+        setAttachments([]);
         return;
       }
 
-      setServerMessages(messageData.messages);
-      setAttachments((current) => {
-        const tempFailures = current.filter((document) => document.isTemp && document.status === 'failed');
-        return [...documentData.documents, ...tempFailures];
-      });
-    } catch (error) {
-      if (isAbortError(error)) {
-        return;
-      }
+      const token = activeLoadTokenRef.current + 1;
+      activeLoadAbortRef.current?.abort();
+      const controller = new AbortController();
+      activeLoadAbortRef.current = controller;
+      activeLoadTokenRef.current = token;
+      setLoadingThread(true);
+      setComposerError('');
 
-      if (token !== activeLoadTokenRef.current || activeChatIdRef.current !== chatId) {
-        return;
-      }
+      try {
+        const [messageData, documentData] = await Promise.all([
+          listMessages(chatId, 200, controller.signal),
+          listChatDocuments(chatId, controller.signal),
+        ]);
 
-      setServerMessages([]);
-      setAttachments([]);
-      setComposerError(error instanceof Error ? error.message : 'Failed to load chat.');
-    } finally {
-      if (activeLoadAbortRef.current === controller) {
-        activeLoadAbortRef.current = null;
-      }
+        if (token !== activeLoadTokenRef.current || activeChatIdRef.current !== chatId) {
+          return;
+        }
 
-      if (token === activeLoadTokenRef.current) {
-        setLoadingThread(false);
+        setServerMessages(messageData.messages);
+        setAttachments((current) => {
+          const tempFailures = current.filter((document) => document.isTemp && document.status === 'failed');
+          return [...documentData.documents, ...tempFailures];
+        });
+      } catch (error) {
+        if (isAbortError(error)) {
+          return;
+        }
+
+        if (token !== activeLoadTokenRef.current || activeChatIdRef.current !== chatId) {
+          return;
+        }
+
+        setServerMessages([]);
+        setAttachments([]);
+        setComposerError(error instanceof Error ? error.message : 'Failed to load chat.');
+      } finally {
+        if (activeLoadAbortRef.current === controller) {
+          activeLoadAbortRef.current = null;
+        }
+
+        if (token === activeLoadTokenRef.current) {
+          setLoadingThread(false);
+        }
       }
-    }
-  }, [user]);
+    },
+    [user],
+  );
 
   const createNewChat = useCallback(async () => {
     const data = await createChat();
     setServerChats((current) => [data.chat, ...current.filter((chat) => chat.id !== data.chat.id)]);
-    updateChatPreferences((current) => {
-      if (!current[data.chat.id]) {
-        return current;
-      }
-
-      const next = { ...current };
-      delete next[data.chat.id];
-      return next;
-    });
     setActiveChatId(data.chat.id);
     setServerMessages([]);
     setStreamingMessage(null);
     setAttachments([]);
     setComposerError('');
     return data.chat.id;
-  }, [updateChatPreferences]);
+  }, []);
 
   const selectChat = useCallback(async (chatId: string) => {
     if (activeStreamAbortRef.current) {
@@ -349,201 +301,205 @@ export function ChatWorkspaceProvider({ children }: { children: React.ReactNode 
     return createNewChat();
   }, [createNewChat]);
 
-  const sendMessage = useCallback(async (content: string) => {
-    const trimmed = content.trim();
-    if (!trimmed) {
-      return;
-    }
+  const sendMessage = useCallback(
+    async (content: string) => {
+      const trimmed = content.trim();
+      if (!trimmed) {
+        return;
+      }
 
-    const chatId = await ensureActiveChat();
-    const clientMessageId = randomClientMessageId();
-    const optimisticMessageId = `temp-${clientMessageId}`;
-    let metaReceived = false;
+      const chatId = await ensureActiveChat();
+      const clientMessageId = randomClientMessageId();
+      const optimisticMessageId = `temp-${clientMessageId}`;
+      let metaReceived = false;
 
-    setComposerError('');
-    setSending(true);
-    setServerMessages((current) => [
-      ...current,
-      {
-        id: optimisticMessageId,
-        chat_id: chatId,
-        role: 'user',
-        content: trimmed,
-        client_message_id: clientMessageId,
-        created_at: new Date().toISOString(),
-      },
-    ]);
-    setStreamingMessage({ role: 'assistant', content: '' });
-
-    const controller = new AbortController();
-    activeStreamAbortRef.current = controller;
-
-    try {
-      await streamChatMessage(
-        chatId,
-        { content: trimmed, clientMessageId },
-        async (event) => {
-          if (event.type === 'chat.meta') {
-            metaReceived = true;
-            setServerMessages((current) =>
-              current.map((message) =>
-                message.id === optimisticMessageId
-                  ? {
-                      ...message,
-                      id: event.data.userMessageId,
-                      chat_id: event.data.chatId,
-                    }
-                  : message,
-              ),
-            );
-            return;
-          }
-
-          if (event.type === 'assistant.delta') {
-            setStreamingMessage((current) => ({
-              role: 'assistant',
-              content: `${current?.content || ''}${event.data.text || ''}`,
-            }));
-            return;
-          }
-
-          if (event.type === 'assistant.completed') {
-            setStreamingMessage(null);
-            setServerMessages((current) => [...current, event.data.assistantMessage]);
-            setChatQuota(event.data.quota);
-            await refreshChats();
-          }
+      setComposerError('');
+      setSending(true);
+      setServerMessages((current) => [
+        ...current,
+        {
+          id: optimisticMessageId,
+          chat_id: chatId,
+          role: 'user',
+          content: trimmed,
+          client_message_id: clientMessageId,
+          created_at: new Date().toISOString(),
         },
-        controller.signal,
-      );
-    } catch (error) {
-      if (!isAbortError(error)) {
-        setComposerError(error instanceof Error ? error.message : 'Failed to send message.');
+      ]);
+      setStreamingMessage({ role: 'assistant', content: '' });
+
+      const controller = new AbortController();
+      activeStreamAbortRef.current = controller;
+
+      try {
+        await streamChatMessage(
+          chatId,
+          { content: trimmed, clientMessageId },
+          async (event) => {
+            if (event.type === 'chat.meta') {
+              metaReceived = true;
+              setServerMessages((current) =>
+                current.map((message) =>
+                  message.id === optimisticMessageId
+                    ? {
+                        ...message,
+                        id: event.data.userMessageId,
+                        chat_id: event.data.chatId,
+                      }
+                    : message,
+                ),
+              );
+              return;
+            }
+
+            if (event.type === 'assistant.delta') {
+              setStreamingMessage((current) => ({
+                role: 'assistant',
+                content: `${current?.content || ''}${event.data.text || ''}`,
+              }));
+              return;
+            }
+
+            if (event.type === 'assistant.completed') {
+              setStreamingMessage(null);
+              setServerMessages((current) => [...current, event.data.assistantMessage]);
+              setChatQuota(event.data.quota);
+              await refreshChats();
+            }
+          },
+          controller.signal,
+        );
+      } catch (error) {
+        if (!isAbortError(error)) {
+          setComposerError(error instanceof Error ? error.message : 'Failed to send message.');
+        }
+
+        setStreamingMessage(null);
+
+        if (!metaReceived) {
+          setServerMessages((current) => current.filter((message) => message.id !== optimisticMessageId));
+        }
+      } finally {
+        if (activeStreamAbortRef.current === controller) {
+          activeStreamAbortRef.current = null;
+        }
+
+        setSending(false);
       }
+    },
+    [ensureActiveChat, refreshChats],
+  );
 
-      setStreamingMessage(null);
+  const attachFile = useCallback(
+    async (file: File) => {
+      const chatId = await ensureActiveChat();
+      const tempAttachment = createTempAttachment(file);
 
-      if (!metaReceived) {
-        setServerMessages((current) => current.filter((message) => message.id !== optimisticMessageId));
-      }
-    } finally {
-      if (activeStreamAbortRef.current === controller) {
-        activeStreamAbortRef.current = null;
-      }
+      setComposerError('');
+      setAttachments((current) => [...current, tempAttachment]);
 
-      setSending(false);
-    }
-  }, [ensureActiveChat, refreshChats]);
+      try {
+        const data = await uploadDocumentToChat(chatId, file, (progress) => {
+          setAttachments((current) =>
+            current.map((document) =>
+              document.id === tempAttachment.id
+                ? {
+                    ...document,
+                    progress,
+                    status: 'uploading',
+                  }
+                : document,
+            ),
+          );
+        });
 
-  const attachFile = useCallback(async (file: File) => {
-    const chatId = await ensureActiveChat();
-    const tempAttachment = createTempAttachment(file);
+        setAttachments((current) =>
+          current.map((document) =>
+            document.id === tempAttachment.id
+              ? {
+                  ...data.document,
+                  isTemp: false,
+                }
+              : document,
+          ),
+        );
 
-    setComposerError('');
-    setAttachments((current) => [...current, tempAttachment]);
+        await refreshChats();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Upload failed.';
 
-    try {
-      const data = await uploadDocumentToChat(chatId, file, (progress) => {
+        setComposerError(message);
         setAttachments((current) =>
           current.map((document) =>
             document.id === tempAttachment.id
               ? {
                   ...document,
-                  progress,
-                  status: 'uploading',
+                  status: 'failed',
+                  last_error: message,
+                  progress: undefined,
                 }
               : document,
           ),
         );
-      });
+      }
+    },
+    [ensureActiveChat, refreshChats],
+  );
 
-      setAttachments((current) =>
-        current.map((document) =>
-          document.id === tempAttachment.id
-            ? {
-                ...data.document,
-                isTemp: false,
-              }
-            : document,
-        ),
-      );
+  const removeAttachment = useCallback(
+    async (documentId: string) => {
+      if (!activeChatIdRef.current) {
+        return;
+      }
 
-      await refreshChats();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Upload failed.';
+      const target = attachments.find((document) => document.id === documentId);
 
-      setComposerError(message);
-      setAttachments((current) =>
-        current.map((document) =>
-          document.id === tempAttachment.id
-            ? {
-                ...document,
-                status: 'failed',
-                last_error: message,
-                progress: undefined,
-              }
-            : document,
-        ),
-      );
-    }
-  }, [ensureActiveChat, refreshChats]);
+      if (target?.isTemp) {
+        setAttachments((current) => current.filter((document) => document.id !== documentId));
+        return;
+      }
 
-  const removeAttachment = useCallback(async (documentId: string) => {
-    if (!activeChatIdRef.current) {
-      return;
-    }
-
-    const target = attachments.find((document) => document.id === documentId);
-
-    if (target?.isTemp) {
+      await removeChatDocument(activeChatIdRef.current, documentId);
       setAttachments((current) => current.filter((document) => document.id !== documentId));
+      await refreshChats();
+    },
+    [attachments, refreshChats],
+  );
+
+  const renameChat = useCallback(async (chatId: string, title: string) => {
+    const trimmed = title.trim();
+    if (!trimmed) {
       return;
     }
 
-    await removeChatDocument(activeChatIdRef.current, documentId);
-    setAttachments((current) => current.filter((document) => document.id !== documentId));
-    await refreshChats();
-  }, [attachments, refreshChats]);
+    const data = await updateChatRequest(chatId, { title: trimmed });
+    setServerChats((current) => current.map((chat) => (chat.id === chatId ? { ...chat, ...data.chat } : chat)));
+  }, []);
 
-  const renameChat = useCallback((chatId: string, title: string) => {
-    const trimmed = title.trim();
+  const togglePinnedChat = useCallback(
+    async (chatId: string) => {
+      const chat = serverChats.find((entry) => entry.id === chatId);
+      if (!chat) {
+        return;
+      }
 
-    updateChatPreferences((current) => ({
-      ...current,
-      [chatId]: {
-        ...current[chatId],
-        title: trimmed || undefined,
-      },
-    }));
-  }, [updateChatPreferences]);
+      const data = await updateChatRequest(chatId, { pinned: !chat.pinned });
+      setServerChats((current) => current.map((entry) => (entry.id === chatId ? { ...entry, ...data.chat } : entry)));
+    },
+    [serverChats],
+  );
 
-  const togglePinnedChat = useCallback((chatId: string) => {
-    updateChatPreferences((current) => ({
-      ...current,
-      [chatId]: {
-        ...current[chatId],
-        pinned: !current[chatId]?.pinned,
-      },
-    }));
-  }, [updateChatPreferences]);
+  const deleteChat = useCallback(async (chatId: string) => {
+    await deleteChatRequest(chatId);
 
-  const deleteChat = useCallback((chatId: string) => {
-    updateChatPreferences((current) => ({
-      ...current,
-      [chatId]: {
-        ...current[chatId],
-        hidden: true,
-      },
-    }));
-
-    setServerMessages((current) => (activeChatIdRef.current === chatId ? [] : current));
-    setStreamingMessage((current) => (activeChatIdRef.current === chatId ? null : current));
-    setAttachments((current) =>
-      activeChatIdRef.current === chatId
-        ? current.filter((document) => document.isTemp && document.status === 'failed')
-        : current,
-    );
-  }, [updateChatPreferences]);
+    setServerChats((current) => current.filter((chat) => chat.id !== chatId));
+    if (activeChatIdRef.current === chatId) {
+      setActiveChatId((current) => (current === chatId ? null : current));
+      setServerMessages([]);
+      setStreamingMessage(null);
+      setAttachments((current) => current.filter((document) => document.isTemp && document.status === 'failed'));
+    }
+  }, []);
 
   useEffect(() => {
     refreshChats().catch(() => {
@@ -621,17 +577,11 @@ export function ChatWorkspaceProvider({ children }: { children: React.ReactNode 
 
   const chats = useMemo<WorkspaceChatRecord[]>(() => {
     return serverChats
-      .map((chat) => {
-        const preference = chatPreferences[chat.id];
-
-        return {
-          ...chat,
-          originalTitle: chat.title,
-          title: preference?.title?.trim() || chat.title,
-          isPinned: Boolean(preference?.pinned),
-        };
-      })
-      .filter((chat) => !chatPreferences[chat.id]?.hidden)
+      .map((chat) => ({
+        ...chat,
+        originalTitle: chat.title,
+        isPinned: Boolean(chat.pinned),
+      }))
       .sort((left, right) => {
         if (left.isPinned !== right.isPinned) {
           return left.isPinned ? -1 : 1;
@@ -639,7 +589,7 @@ export function ChatWorkspaceProvider({ children }: { children: React.ReactNode 
 
         return new Date(right.updated_at).getTime() - new Date(left.updated_at).getTime();
       });
-  }, [chatPreferences, serverChats]);
+  }, [serverChats]);
 
   useEffect(() => {
     if (chats.length === 0) {
@@ -675,6 +625,7 @@ export function ChatWorkspaceProvider({ children }: { children: React.ReactNode 
       workspaceLimits,
       workspaceMessage,
       retrievalMode,
+      modelName,
       repositoryUrl,
       runLocallyGuideUrl,
       readyStatus,
@@ -692,21 +643,21 @@ export function ChatWorkspaceProvider({ children }: { children: React.ReactNode 
       activeChat,
       activeChatId,
       attachments,
+      attachFile,
       chatQuota,
       chats,
       composerError,
       createNewChat,
       deleteChat,
-      workspaceLimits,
-      workspaceMessage,
       loadingChats,
       loadingThread,
+      modelName,
       refreshChats,
       readyStatus,
       removeAttachment,
+      renameChat,
       repositoryUrl,
       retrievalMode,
-      renameChat,
       runLocallyGuideUrl,
       selectChat,
       sendMessage,
@@ -714,7 +665,8 @@ export function ChatWorkspaceProvider({ children }: { children: React.ReactNode 
       serverMessages,
       streamingMessage,
       togglePinnedChat,
-      attachFile,
+      workspaceLimits,
+      workspaceMessage,
     ],
   );
 

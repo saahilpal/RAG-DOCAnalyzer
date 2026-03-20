@@ -14,6 +14,15 @@ const createChatSchema = z.object({
   title: z.string().trim().min(1).max(120).optional(),
 });
 
+const updateChatSchema = z
+  .object({
+    title: z.string().trim().min(1).max(120).optional(),
+    pinned: z.boolean().optional(),
+  })
+  .refine((value) => value.title !== undefined || value.pinned !== undefined, {
+    message: 'At least one field is required.',
+  });
+
 const listChatsQuerySchema = z.object({
   limit: z.coerce.number().int().positive().max(100).optional(),
 });
@@ -31,6 +40,7 @@ module.exports = {
   chatIdParamsSchema,
   chatDocumentParamsSchema,
   createChatSchema,
+  updateChatSchema,
   listChatsQuerySchema,
   listMessagesQuerySchema,
   streamMessageSchema,

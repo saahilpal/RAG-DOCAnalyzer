@@ -14,20 +14,24 @@ DROP TABLE IF EXISTS otp_codes CASCADE;
 CREATE TABLE IF NOT EXISTS users (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   email TEXT UNIQUE NOT NULL,
+  password_hash TEXT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   email_verified_at TIMESTAMPTZ
 );
 
 ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified_at TIMESTAMPTZ;
-ALTER TABLE users DROP COLUMN IF EXISTS password_hash;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT;
 
 CREATE TABLE IF NOT EXISTS chats (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   title TEXT NOT NULL DEFAULT 'New Chat',
+  pinned BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE chats ADD COLUMN IF NOT EXISTS pinned BOOLEAN NOT NULL DEFAULT FALSE;
 
 CREATE TABLE IF NOT EXISTS messages (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -106,6 +110,7 @@ CREATE TABLE IF NOT EXISTS daily_chat_usage (
 CREATE TABLE IF NOT EXISTS otp_codes (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   email TEXT NOT NULL,
+  purpose TEXT NOT NULL DEFAULT 'verify_email' CHECK (purpose IN ('verify_email', 'password_reset')),
   otp_hash TEXT NOT NULL,
   expires_at TIMESTAMPTZ NOT NULL,
   attempts INTEGER NOT NULL DEFAULT 0 CHECK (attempts >= 0),
@@ -113,7 +118,17 @@ CREATE TABLE IF NOT EXISTS otp_codes (
   consumed_at TIMESTAMPTZ
 );
 
+ALTER TABLE otp_codes
+  ADD COLUMN IF NOT EXISTS purpose TEXT NOT NULL DEFAULT 'verify_email';
+
+ALTER TABLE otp_codes
+  DROP CONSTRAINT IF EXISTS otp_codes_purpose_check;
+
+ALTER TABLE otp_codes
+  ADD CONSTRAINT otp_codes_purpose_check CHECK (purpose IN ('verify_email', 'password_reset'));
+
 CREATE INDEX IF NOT EXISTS idx_chats_user_id ON chats(user_id);
+CREATE INDEX IF NOT EXISTS idx_chats_user_id_pinned_updated_at ON chats(user_id, pinned DESC, updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_chats_updated_at ON chats(updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_messages_chat_id ON messages(chat_id);
 CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at DESC);
@@ -128,6 +143,7 @@ CREATE INDEX IF NOT EXISTS idx_daily_chat_usage_date ON daily_chat_usage(usage_d
 CREATE INDEX IF NOT EXISTS idx_otp_codes_email ON otp_codes(email);
 CREATE INDEX IF NOT EXISTS idx_otp_codes_expires_at ON otp_codes(expires_at);
 CREATE INDEX IF NOT EXISTS idx_otp_codes_email_created_at ON otp_codes(email, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_otp_codes_email_purpose_created_at ON otp_codes(email, purpose, created_at DESC);
 
 -- Backend cleanup query:
 -- DELETE FROM otp_codes

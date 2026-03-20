@@ -23,7 +23,7 @@ function buildOtpResponse(message) {
   };
 }
 
-async function sendOtpAndHandleFailures(issuance) {
+async function sendVerificationAndHandleFailures(issuance) {
   try {
     await mailService.sendVerificationCodeEmail({
       email: issuance.email,
@@ -35,35 +35,85 @@ async function sendOtpAndHandleFailures(issuance) {
   }
 }
 
-async function requestOtp(req, res) {
-  const issuance = await authService.requestOtpForEmail({ email: req.body.email });
-  await sendOtpAndHandleFailures(issuance);
+async function sendResetCodeAndHandleFailures(issuance) {
+  try {
+    await mailService.sendPasswordResetCodeEmail({
+      email: issuance.email,
+      otp: issuance.otp,
+    });
+  } catch (error) {
+    await authService.invalidateOtpCodeById(issuance.id);
+    throw error;
+  }
+}
+
+async function signup(req, res) {
+  const result = await authService.signUpWithPassword(req.body);
+  await sendVerificationAndHandleFailures(result.verification);
 
   return ok(
     res,
-    buildOtpResponse('If the address can receive codes, a verification code has been sent.'),
+    buildOtpResponse('Verification code sent. Enter the code to activate your account.'),
+    201,
   );
 }
 
-async function resendOtp(req, res) {
-  const issuance = await authService.resendOtpForEmail({ email: req.body.email });
-  await sendOtpAndHandleFailures(issuance);
+async function resendVerification(req, res) {
+  const issuance = await authService.resendVerificationForEmail({ email: req.body.email });
+  await sendVerificationAndHandleFailures(issuance);
 
   return ok(
     res,
-    buildOtpResponse('If the address can receive codes, a fresh verification code has been sent.'),
+    buildOtpResponse('A fresh verification code has been sent to your inbox.'),
   );
 }
 
-async function verifyOtp(req, res) {
-  const result = await authService.verifyOtpForEmail(req.body);
-
+async function verifySignup(req, res) {
+  const result = await authService.verifySignupOtp(req.body);
   res.cookie(env.authCookieName, result.token, getAuthCookieOptions());
 
   return ok(res, {
     token: result.token,
     user: result.user,
   });
+}
+
+async function login(req, res) {
+  const result = await authService.loginWithPassword(req.body);
+  res.cookie(env.authCookieName, result.token, getAuthCookieOptions());
+
+  return ok(res, {
+    token: result.token,
+    user: result.user,
+  });
+}
+
+async function requestPasswordReset(req, res) {
+  const issuance = await authService.requestPasswordReset({ email: req.body.email });
+
+  if (issuance) {
+    await sendResetCodeAndHandleFailures(issuance);
+  }
+
+  return ok(
+    res,
+    buildOtpResponse('If an account exists for this email, a password reset code has been sent.'),
+  );
+}
+
+async function resetPassword(req, res) {
+  const result = await authService.resetPassword(req.body);
+  return ok(res, result);
+}
+
+async function changePassword(req, res) {
+  const result = await authService.changePassword({
+    userId: req.auth.userId,
+    currentPassword: req.body.currentPassword,
+    newPassword: req.body.newPassword,
+  });
+
+  return ok(res, result);
 }
 
 async function logout(_req, res) {
@@ -82,9 +132,13 @@ async function me(req, res) {
 }
 
 module.exports = {
-  requestOtp,
-  resendOtp,
-  verifyOtp,
+  signup,
+  resendVerification,
+  verifySignup,
+  login,
+  requestPasswordReset,
+  resetPassword,
+  changePassword,
   logout,
   me,
 };

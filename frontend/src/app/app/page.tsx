@@ -12,13 +12,12 @@ import { PageTransition } from '@/components/common/page-transition';
 
 const SUGGESTED_PROMPTS = [
   'Summarize the main argument in my document',
-  'Compare the attached PDFs and highlight differences',
+  'Compare the attached files and highlight differences',
   'Find the exact section that answers this question',
 ];
 
 export default function DashboardChatPage() {
   const {
-    activeChat,
     serverMessages,
     streamingMessage,
     attachments,
@@ -26,7 +25,6 @@ export default function DashboardChatPage() {
     sending,
     composerError,
     chatQuota,
-    workspaceLimits,
     runLocallyGuideUrl,
     sendMessage,
     attachFile,
@@ -102,29 +100,28 @@ export default function DashboardChatPage() {
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.28 }}
-                className="rounded-full border border-[color:var(--line)] bg-[rgba(255,252,247,0.88)] p-4 shadow-[0_18px_40px_rgba(18,14,10,0.08)]"
+                className="rounded-full border border-[color:var(--line)] bg-[var(--panel-strong)] p-4 shadow-[var(--shadow-panel)]"
               >
                 <Sparkles size={24} className="text-[var(--accent)]" />
               </motion.div>
 
               <h1 className="font-display mt-8 text-4xl font-semibold tracking-tight text-[var(--foreground)] md:text-5xl">
-                Chat with your documents.
+                Ask your documents anything.
               </h1>
               <p className="mt-3 max-w-xl text-base leading-7 text-[var(--muted)]">
-                Ask follow-ups naturally, attach up to {workspaceLimits?.maxDocsPerChat || 3} PDFs, and get fast,
-                streaming answers in one conversation.
+                Keep everything in one calm thread with grounded answers, attachments, and streaming responses.
               </p>
 
               <div className="mt-8 flex flex-wrap items-center justify-center gap-3 text-sm">
-                <div className="rounded-full border border-[color:var(--line)] bg-[rgba(255,252,247,0.9)] px-4 py-2 text-[var(--muted)]">
+                <div className="rounded-full border border-[color:var(--line)] bg-[var(--panel-strong)] px-4 py-2 text-[var(--muted)]">
                   {readyAttachments} ready
                 </div>
-                <div className="rounded-full border border-[color:var(--line)] bg-[rgba(255,252,247,0.9)] px-4 py-2 text-[var(--muted)]">
+                <div className="rounded-full border border-[color:var(--line)] bg-[var(--panel-strong)] px-4 py-2 text-[var(--muted)]">
                   {pendingAttachments} processing
                 </div>
                 {chatQuota ? (
-                  <div className="rounded-full border border-[color:var(--line)] bg-[rgba(255,252,247,0.9)] px-4 py-2 text-[var(--muted)]">
-                    {chatQuota.remaining} replies left
+                  <div className="rounded-full border border-[color:var(--line)] bg-[var(--panel-strong)] px-4 py-2 text-[var(--muted)]">
+                    {chatQuota.remaining} remaining
                   </div>
                 ) : null}
               </div>
@@ -135,7 +132,7 @@ export default function DashboardChatPage() {
                     key={prompt}
                     type="button"
                     onClick={() => setQuery(prompt)}
-                    className="mx-auto w-full max-w-[620px] rounded-[24px] border border-[color:var(--line)] bg-[rgba(255,252,247,0.84)] px-5 py-4 text-left text-sm text-[var(--foreground)] shadow-[0_10px_24px_rgba(18,14,10,0.06)] transition hover:-translate-y-0.5 hover:bg-[rgba(255,255,255,0.96)]"
+                    className="mx-auto w-full max-w-[620px] rounded-[20px] border border-[color:var(--line)] bg-[var(--panel-strong)] px-5 py-4 text-left text-sm text-[var(--foreground)] shadow-[var(--shadow-panel)] transition hover:-translate-y-0.5 hover:bg-white"
                   >
                     {prompt}
                   </button>
@@ -145,16 +142,16 @@ export default function DashboardChatPage() {
           )}
         </div>
 
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 bg-[linear-gradient(180deg,rgba(243,237,226,0),rgba(243,237,226,0.92)_24%,rgba(243,237,226,1)_100%)] px-4 pb-6 pt-16 sm:px-6 lg:px-10">
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 bg-[linear-gradient(180deg,rgba(244,244,245,0),rgba(244,244,245,0.92)_24%,rgba(244,244,245,1)_100%)] px-4 pb-6 pt-16 sm:px-6 lg:px-10">
           <div className="pointer-events-auto mx-auto w-full max-w-[760px]">
             {composerError ? (
-              <div className="mb-3 rounded-full border border-[rgba(143,45,18,0.12)] bg-[rgba(143,45,18,0.06)] px-4 py-2 text-sm text-[#7d2a12]">
+              <div className="mb-3 rounded-full border border-[rgba(153,27,27,0.2)] bg-[rgba(153,27,27,0.08)] px-4 py-2 text-sm text-[#7f1d1d]">
                 {composerError}
               </div>
             ) : null}
 
             {pendingAttachments > 0 && readyAttachments === 0 ? (
-              <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-[color:var(--line)] bg-[rgba(255,252,247,0.88)] px-4 py-2 text-xs uppercase tracking-[0.14em] text-[var(--muted)]">
+              <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-[color:var(--line)] bg-[var(--panel-strong)] px-4 py-2 text-xs uppercase tracking-[0.14em] text-[var(--muted)]">
                 <FileText size={12} />
                 Processing attachments
               </div>
@@ -182,22 +179,21 @@ export default function DashboardChatPage() {
               attachments={attachments}
               disabled={quotaReached}
               loading={sending}
-              maxAttachments={workspaceLimits?.maxDocsPerChat || 3}
             />
           </div>
         </div>
 
         <Modal
           open={quotaModalOpen}
-          title="Daily quota reached"
-          description="You have used all replies for this hosted workspace today."
-          confirmLabel="Continue locally"
+          title="Usage reached for today"
+          description="You have used the available hosted usage for this workspace."
+          confirmLabel="Run locally"
           cancelLabel="Close"
           onClose={() => setQuotaModalOpen(false)}
           onConfirm={() => window.open(runLocallyGuideUrl, '_blank', 'noopener,noreferrer')}
         >
-          <div className="rounded-[24px] border border-[color:var(--line)] bg-[rgba(255,252,247,0.92)] px-4 py-4 text-sm leading-6 text-[var(--muted)]">
-            Run the project locally for unlimited conversations with the same UI and your own API keys.
+          <div className="rounded-[20px] border border-[color:var(--line)] bg-[var(--panel-strong)] px-4 py-4 text-sm leading-6 text-[var(--muted)]">
+            Run the project locally for uninterrupted usage with the same interface and full control.
           </div>
         </Modal>
       </div>

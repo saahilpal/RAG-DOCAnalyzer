@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ExternalLink, LogOut, Menu, Sparkles } from 'lucide-react';
+import { ExternalLink, LogOut, Menu, Settings2 } from 'lucide-react';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Sidebar } from '@/components/layout/sidebar';
@@ -14,14 +14,14 @@ import { useChatWorkspace } from '@/hooks/use-chat-workspace';
 export function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const { user, signOutUser } = useAuth();
-  const { activeChat, chatQuota, runLocallyGuideUrl, readyStatus } = useChatWorkspace();
+  const { activeChat, chatQuota, runLocallyGuideUrl, readyStatus, modelName } = useChatWorkspace();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   const remainingQuota = chatQuota?.remaining ?? null;
   const quotaLimit = chatQuota?.limit ?? null;
   const quotaLabel =
-    remainingQuota != null && quotaLimit != null ? `${remainingQuota} left of ${quotaLimit}` : 'Quota loading';
+    remainingQuota != null && quotaLimit != null ? `${remainingQuota} left of ${quotaLimit}` : 'Usage loading';
   const initials = user?.email.slice(0, 2).toUpperCase() || 'DA';
 
   return (
@@ -33,7 +33,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <AnimatePresence>
         {sidebarOpen ? (
           <motion.div
-            className="fixed inset-0 z-50 bg-black/38 lg:hidden"
+            className="fixed inset-0 z-50 bg-black/30 lg:hidden"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -57,12 +57,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
         <header className="glass-panel z-20 flex h-16 items-center justify-between border-b border-[color:var(--line)] px-4 md:px-6">
           <div className="flex min-w-0 items-center gap-3">
-            <Button
-              variant="secondary"
-              size="icon"
-              className="lg:hidden"
-              onClick={() => setSidebarOpen(true)}
-            >
+            <Button variant="secondary" size="icon" className="lg:hidden" onClick={() => setSidebarOpen(true)}>
               <Menu size={16} />
             </Button>
 
@@ -75,15 +70,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
 
           <div className="flex items-center gap-2 md:gap-3">
-            <div className="hidden items-center gap-2 rounded-full border border-[color:var(--line)] bg-[rgba(255,252,247,0.72)] px-3 py-1.5 text-xs text-[var(--muted)] shadow-[0_6px_20px_rgba(18,14,10,0.06)] sm:inline-flex">
-              <Sparkles size={13} className={readyStatus.ai ? 'text-[var(--accent)]' : 'text-[var(--muted)]'} />
+            <div className="hidden items-center gap-2 rounded-full border border-[color:var(--line)] bg-[var(--panel-strong)] px-3 py-1.5 text-xs text-[var(--muted)] shadow-[var(--shadow-panel)] sm:inline-flex">
+              <span className={`h-2 w-2 rounded-full ${readyStatus.ai ? 'bg-neutral-900' : 'bg-neutral-400'}`} />
               <span>{quotaLabel}</span>
             </div>
 
             <button
               type="button"
               onClick={() => setSettingsOpen(true)}
-              className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-[color:var(--line)] bg-[rgba(255,252,247,0.88)] text-sm font-semibold text-[var(--foreground)] shadow-[0_6px_18px_rgba(18,14,10,0.08)] transition hover:-translate-y-0.5 hover:bg-white"
+              className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-[color:var(--line)] bg-[var(--panel-strong)] text-sm font-semibold text-[var(--foreground)] shadow-[var(--shadow-panel)] transition hover:-translate-y-0.5"
               aria-label="Open settings panel"
             >
               {initials}
@@ -97,7 +92,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <AnimatePresence>
         {settingsOpen ? (
           <motion.div
-            className="fixed inset-0 z-50 bg-black/28"
+            className="fixed inset-0 z-50 bg-black/25"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -105,7 +100,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             onClick={() => setSettingsOpen(false)}
           >
             <motion.aside
-              className="absolute right-0 top-0 h-full w-full max-w-md border-l border-[color:var(--line)] bg-[rgba(255,252,247,0.95)] p-6 shadow-[0_24px_80px_rgba(18,14,10,0.18)] backdrop-blur-2xl"
+              className="absolute right-0 top-0 h-full w-full max-w-md border-l border-[color:var(--line)] bg-[var(--panel)] p-6 shadow-[var(--shadow-soft)] backdrop-blur-2xl"
               initial={{ x: 40, opacity: 0 }}
               animate={{ x: 0, opacity: 1 }}
               exit={{ x: 24, opacity: 0 }}
@@ -116,51 +111,81 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <p className="text-[11px] uppercase tracking-[0.22em] text-[var(--muted)]">Settings</p>
-                    <h2 className="font-display text-2xl font-semibold text-[var(--foreground)]">Your workspace</h2>
+                    <h2 className="font-display text-2xl font-semibold text-[var(--foreground)]">Your account</h2>
                   </div>
                   <Button variant="ghost" size="icon" onClick={() => setSettingsOpen(false)}>
                     <span className="text-lg leading-none">×</span>
                   </Button>
                 </div>
 
-                <div className="mt-8 space-y-4">
-                  <div className="rounded-[28px] border border-[color:var(--line)] bg-[var(--panel-strong)] p-5 shadow-[var(--shadow-panel)]">
-                    <p className="text-[11px] uppercase tracking-[0.22em] text-[var(--muted)]">Account</p>
+                <div className="mt-7 space-y-4">
+                  <div className="rounded-[20px] border border-[color:var(--line)] bg-[var(--panel-strong)] p-5 shadow-[var(--shadow-panel)]">
+                    <p className="text-[11px] uppercase tracking-[0.22em] text-[var(--muted)]">Email</p>
                     <p className="mt-3 text-base font-semibold text-[var(--foreground)]">{user?.email}</p>
-                    <p className="mt-1 text-sm text-[var(--muted)]">Signed in with passwordless email access.</p>
                   </div>
 
-                  <div className="rounded-[28px] border border-[color:var(--line)] bg-[var(--panel-strong)] p-5 shadow-[var(--shadow-panel)]">
+                  <div className="rounded-[20px] border border-[color:var(--line)] bg-[var(--panel-strong)] p-5 shadow-[var(--shadow-panel)]">
+                    <p className="text-[11px] uppercase tracking-[0.22em] text-[var(--muted)]">Model</p>
+                    <p className="mt-3 text-sm font-semibold text-[var(--foreground)]">{modelName || 'Loading model...'}</p>
+                  </div>
+
+                  <div className="rounded-[20px] border border-[color:var(--line)] bg-[var(--panel-strong)] p-5 shadow-[var(--shadow-panel)]">
                     <div className="flex items-center justify-between gap-4">
                       <div>
-                        <p className="text-[11px] uppercase tracking-[0.22em] text-[var(--muted)]">Quota</p>
+                        <p className="text-[11px] uppercase tracking-[0.22em] text-[var(--muted)]">Remaining usage</p>
                         <p className="mt-3 font-display text-3xl font-semibold text-[var(--foreground)]">
                           {remainingQuota ?? '--'}
                         </p>
-                        <p className="text-sm text-[var(--muted)]">Replies remaining today</p>
                       </div>
-                      <div className="rounded-full bg-[var(--accent-soft)] px-3 py-1 text-xs font-semibold text-[var(--accent-strong)]">
-                        {quotaLimit ? `${chatQuota?.used || 0}/${quotaLimit} used` : 'Loading'}
+                      <div className="rounded-full border border-[color:var(--line)] px-3 py-1 text-xs font-semibold text-[var(--muted)]">
+                        {quotaLimit ? `${chatQuota?.used || 0}/${quotaLimit}` : '...'}
                       </div>
                     </div>
                   </div>
 
-                  <div className="rounded-[28px] border border-[color:var(--line)] bg-[linear-gradient(135deg,rgba(216,120,27,0.12),rgba(255,252,247,0.9))] p-5 shadow-[var(--shadow-panel)]">
-                    <p className="text-[11px] uppercase tracking-[0.22em] text-[var(--muted)]">Unlimited mode</p>
-                    <h3 className="mt-3 font-display text-xl font-semibold text-[var(--foreground)]">
-                      Run locally for unlimited usage
-                    </h3>
-                    <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
-                      Keep the same chat experience with your own keys, your own limits, and full control.
+                  <div className="rounded-[20px] border border-[color:var(--line)] bg-[var(--panel-strong)] p-5 shadow-[var(--shadow-panel)]">
+                    <p className="text-[11px] uppercase tracking-[0.22em] text-[var(--muted)]">Actions</p>
+                    <div className="mt-3 space-y-2">
+                      <Link
+                        href={`/forgot-password?email=${encodeURIComponent(user?.email || '')}`}
+                        className="inline-flex w-full items-center justify-between rounded-xl border border-[color:var(--line)] px-3 py-2 text-sm font-medium text-[var(--foreground)] transition hover:bg-[rgba(255,255,255,0.55)]"
+                      >
+                        Reset password
+                        <Settings2 size={14} />
+                      </Link>
+                      <Link
+                        href={runLocallyGuideUrl}
+                        target="_blank"
+                        className="inline-flex w-full items-center justify-between rounded-xl border border-[color:var(--line)] px-3 py-2 text-sm font-medium text-[var(--foreground)] transition hover:bg-[rgba(255,255,255,0.55)]"
+                      >
+                        Run locally for unlimited usage
+                        <ExternalLink size={14} />
+                      </Link>
+                    </div>
+                  </div>
+
+                  <div className="rounded-[20px] border border-[color:var(--line)] bg-[var(--panel-strong)] p-5 shadow-[var(--shadow-panel)]">
+                    <p className="text-[11px] uppercase tracking-[0.22em] text-[var(--muted)]">About me</p>
+                    <p className="mt-3 text-sm leading-6 text-[var(--muted)]">
+                      Built by Sahil Pal. Backend-first engineer focused on resilient systems and polished user
+                      experience.
                     </p>
-                    <Link
-                      href={runLocallyGuideUrl}
-                      target="_blank"
-                      className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-[var(--foreground)]"
-                    >
-                      Open local setup
-                      <ExternalLink size={14} />
-                    </Link>
+                    <div className="mt-3 flex gap-2">
+                      <Link
+                        href="https://github.com/saahilpal"
+                        target="_blank"
+                        className="inline-flex rounded-lg border border-[color:var(--line)] px-3 py-1.5 text-xs font-medium text-[var(--foreground)]"
+                      >
+                        GitHub
+                      </Link>
+                      <Link
+                        href="https://www.linkedin.com/in/sahiilpal"
+                        target="_blank"
+                        className="inline-flex rounded-lg border border-[color:var(--line)] px-3 py-1.5 text-xs font-medium text-[var(--foreground)]"
+                      >
+                        LinkedIn
+                      </Link>
+                    </div>
                   </div>
                 </div>
 

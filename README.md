@@ -1,48 +1,48 @@
 # Document Analyzer RAG
 
-Chat with your documents. Like ChatGPT, but context-aware.
+Chat with your documents in a premium, chat-first AI workspace.
 
 ## Overview
 
-Document Analyzer RAG is a chat-first application for asking questions, exploring PDFs, and carrying context forward across follow-up messages. Instead of treating uploaded files like a dashboard or document management system, the product keeps the experience centered on conversation. Documents become lightweight attachments to a chat, so the assistant can answer naturally while staying grounded in the right sources.
+Document Analyzer RAG is built for conversational document understanding. Instead of navigating a dashboard-heavy interface, users stay in one clean chat flow: attach files, ask questions, and get grounded responses with streaming output.
 
-This makes the workflow useful for research, internal notes, product planning, hiring packets, policies, and any other documents that need explanation, synthesis, or comparison through a conversational interface.
+The platform combines a polished Next.js frontend with an Express backend, Supabase storage, PostgreSQL retrieval, and Gemini generation.
 
-## Features
+## Product Highlights
 
-- Conversational RAG with multi-turn context
-- Multi-document retrieval scoped to the active chat
-- Streaming responses over Server-Sent Events
-- Async PDF processing with clear document states
-- OTP-based authentication with session restore
-- Chat history sidebar with isolated per-chat context
-- Vector retrieval with PostgreSQL FTS fallback
+- Chat-first RAG with multi-turn memory
+- Multi-document context per conversation
+- Streaming assistant responses (SSE)
+- Email + password auth with verification and password reset
+- Persistent chat controls: rename, pin, delete
+- Usage quota and account settings panel
+- Vector retrieval with automatic FTS fallback
 
-## How It Works
+## Architecture
 
-1. Start a chat and optionally attach up to three PDFs.
-2. The backend stores and indexes documents asynchronously while the UI reflects upload and processing state.
-3. Each message uses recent chat history plus retrieved chunks from attached documents to generate a streamed response.
+### System View
+
+<p align="center">
+  <img src="./docs/architecture.svg" alt="System architecture diagram" width="960" />
+</p>
+
+### RAG Flow
+
+<p align="center">
+  <img src="./docs/rag-architecture.svg" alt="RAG retrieval and generation flow diagram" width="960" />
+</p>
+
+For additional architecture notes, see [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md).
 
 ## Tech Stack
 
 - Frontend: Next.js, React, Tailwind CSS, Framer Motion
 - Backend: Node.js, Express
-- Database: PostgreSQL on Supabase
-- File Storage: Supabase Storage
-- AI: Google Gemini for generation and optional embeddings
-- Deployment: Vercel for frontend, Render for backend
-
-## Preview
-
-The interface is a minimal chat workspace with:
-
-- a sidebar for chat history
-- a streaming conversation thread
-- lightweight document attachment chips
-- OTP sign-in and session restore
-
-Technical architecture artwork is available at [`docs/architecture.svg`](./docs/architecture.svg).
+- Database: PostgreSQL (Supabase)
+- Storage: Supabase Storage
+- AI: Google Gemini
+- Email: Resend
+- Deployment: Vercel (frontend), Render (backend)
 
 ## Run Locally
 
@@ -68,7 +68,7 @@ cd frontend
 cp .env.example .env.local
 ```
 
-Required backend variables include:
+Required backend variables:
 
 - `DATABASE_URL`
 - `SUPABASE_URL`
@@ -101,17 +101,11 @@ npm run dev
 
 ## Deployment
 
-The project is structured for:
-
-- Vercel for the Next.js frontend
-- Render for the Express backend
-- Supabase for PostgreSQL and file storage
-
 Deployment references:
 
 - Backend blueprint: [`render.yaml`](./render.yaml)
 - Frontend config: [`frontend/vercel.json`](./frontend/vercel.json)
-- Step-by-step deployment guide: [`DEPLOYMENT_CHECKLIST.md`](./DEPLOYMENT_CHECKLIST.md)
+- Checklist: [`DEPLOYMENT_CHECKLIST.md`](./DEPLOYMENT_CHECKLIST.md)
 
 ## Verification
 
@@ -124,8 +118,9 @@ npm run frontend:lint
 npm run frontend:build
 ```
 
-## Future Improvements
+## About
 
-- Dedicated worker service for higher indexing throughput
-- Richer retrieval reranking and citation UX
-- Chat export and workspace sharing
+Built by Sahil Pal.
+
+- GitHub: [`saahilpal`](https://github.com/saahilpal)
+- LinkedIn: [`sahiilpal`](https://www.linkedin.com/in/sahiilpal)

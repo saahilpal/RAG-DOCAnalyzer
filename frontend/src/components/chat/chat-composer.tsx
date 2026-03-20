@@ -52,7 +52,7 @@ export function ChatComposer({
   return (
     <form
       ref={formRef}
-      className="rounded-[30px] border border-[rgba(255,255,255,0.72)] bg-[rgba(255,251,246,0.92)] px-4 py-3 shadow-[0_20px_60px_rgba(18,14,10,0.12)] backdrop-blur-xl"
+      className="rounded-[30px] border border-[color:var(--line)] bg-[var(--panel-strong)] px-4 py-3 shadow-[0_20px_60px_rgba(24,24,27,0.12)] backdrop-blur-xl"
       onSubmit={(event) => {
         event.preventDefault();
         if (!value.trim() || disabled || loading) {
@@ -83,7 +83,7 @@ export function ChatComposer({
           size="icon"
           disabled={disabled || loading || countedAttachments >= maxAttachments}
           onClick={() => fileInputRef.current?.click()}
-          className="h-11 w-11 shrink-0 rounded-full bg-[rgba(23,20,17,0.04)] text-[var(--muted)] hover:bg-[rgba(23,20,17,0.08)] hover:text-[var(--foreground)]"
+          className="h-11 w-11 shrink-0 rounded-full bg-[rgba(24,24,27,0.05)] text-[var(--muted)] hover:bg-[rgba(24,24,27,0.08)] hover:text-[var(--foreground)]"
         >
           <Paperclip size={18} />
         </Button>

@@ -33,7 +33,7 @@ export function ChatBubble({ role, content, timestamp }: ChatBubbleProps) {
         )}
       >
         {!isUser ? (
-          <div className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-[color:var(--line)] bg-[rgba(255,252,247,0.9)] text-[var(--accent)] shadow-[0_10px_24px_rgba(18,14,10,0.08)] sm:flex">
+          <div className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-[color:var(--line)] bg-[var(--panel-strong)] text-[var(--accent)] shadow-[var(--shadow-panel)] sm:flex">
             <Sparkles size={16} />
           </div>
         ) : null}
@@ -41,7 +41,7 @@ export function ChatBubble({ role, content, timestamp }: ChatBubbleProps) {
         <div
           className={cn(
             isUser
-              ? 'max-w-[85%] rounded-[26px] bg-[var(--foreground)] px-5 py-4 text-[var(--background-strong)] shadow-[0_18px_36px_rgba(17,14,11,0.16)] sm:max-w-[78%]'
+              ? 'max-w-[85%] rounded-[26px] bg-[var(--foreground)] px-5 py-4 text-[var(--background-strong)] shadow-[0_18px_36px_rgba(24,24,27,0.16)] sm:max-w-[78%]'
               : 'min-w-0 flex-1 text-[var(--foreground)]',
           )}
         >

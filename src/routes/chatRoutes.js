@@ -10,6 +10,7 @@ const {
   chatIdParamsSchema,
   chatDocumentParamsSchema,
   createChatSchema,
+  updateChatSchema,
   listChatsQuerySchema,
   listMessagesQuerySchema,
   streamMessageSchema,
@@ -29,6 +30,19 @@ const upload = multer({
 router.get('/', requireAuth, validateQuery(listChatsQuerySchema), asyncHandler(controller.listChats));
 router.post('/', requireAuth, validateBody(createChatSchema), asyncHandler(controller.createChat));
 router.get('/:chatId', requireAuth, validateParams(chatIdParamsSchema), asyncHandler(controller.getChat));
+router.patch(
+  '/:chatId',
+  requireAuth,
+  validateParams(chatIdParamsSchema),
+  validateBody(updateChatSchema),
+  asyncHandler(controller.updateChat),
+);
+router.delete(
+  '/:chatId',
+  requireAuth,
+  validateParams(chatIdParamsSchema),
+  asyncHandler(controller.deleteChat),
+);
 router.get(
   '/:chatId/messages',
   requireAuth,

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { MessageSquarePlus, Pin, Pencil, Trash2 } from 'lucide-react';
+import { MessageSquarePlus, Pin } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Dropdown } from '@/components/ui/dropdown';
@@ -107,7 +107,9 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                     >
                       <div className="flex items-center gap-2">
                         <p className="truncate text-sm font-semibold text-[var(--sidebar-foreground)]">{chat.title}</p>
-                        {chat.isPinned ? <Pin size={12} className="shrink-0 text-[#f1c48a]" /> : null}
+                        {chat.isPinned ? (
+                          <Pin size={12} className="shrink-0 text-[var(--sidebar-foreground)]" />
+                        ) : null}
                       </div>
                       <p className="mt-1 line-clamp-2 text-xs leading-5 text-[var(--sidebar-muted)]">
                         {chat.last_message || 'No messages yet'}
@@ -132,7 +134,9 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                           },
                           {
                             label: chat.isPinned ? 'Unpin' : 'Pin',
-                            onSelect: () => togglePinnedChat(chat.id),
+                            onSelect: () => {
+                              void togglePinnedChat(chat.id);
+                            },
                           },
                           {
                             type: 'separator',
@@ -165,7 +169,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
             return;
           }
 
-          renameChat(renameTarget.id, renameValue);
+          void renameChat(renameTarget.id, renameValue);
           setRenameTarget(null);
         }}
       >
@@ -180,7 +184,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
       <Modal
         open={Boolean(deleteTarget)}
         title="Delete chat"
-        description="This removes the conversation from your sidebar on this device."
+        description="This permanently deletes the conversation and all messages."
         confirmLabel="Delete"
         confirmVariant="danger"
         cancelLabel="Cancel"
@@ -190,15 +194,15 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
             return;
           }
 
-          deleteChat(deleteTarget.id);
+          void deleteChat(deleteTarget.id);
           setDeleteTarget(null);
           router.push('/app');
           onNavigate?.();
         }}
       >
         <div className="rounded-2xl border border-[color:var(--line)] bg-[rgba(23,20,17,0.03)] px-4 py-3 text-sm text-[var(--muted)]">
-          <span className="font-medium text-[var(--foreground)]">{deleteTarget?.title}</span> will disappear from the
-          chat list immediately.
+          <span className="font-medium text-[var(--foreground)]">{deleteTarget?.title}</span> and all related messages
+          will be removed.
         </div>
       </Modal>
     </>

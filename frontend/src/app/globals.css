@@ -1,22 +1,22 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f3ede2;
-  --background-strong: #f9f5ee;
-  --panel: rgba(255, 252, 247, 0.86);
-  --panel-strong: #fffdf8;
-  --foreground: #171411;
-  --muted: #6f685f;
-  --line: rgba(39, 32, 23, 0.11);
-  --line-strong: rgba(24, 19, 13, 0.2);
-  --accent: #d8781b;
-  --accent-strong: #b95b05;
-  --accent-soft: rgba(216, 120, 27, 0.14);
-  --sidebar: #12100e;
-  --sidebar-foreground: #f5efe6;
-  --sidebar-muted: #9f9485;
-  --shadow-soft: 0 24px 80px rgba(24, 18, 12, 0.09);
-  --shadow-panel: 0 10px 40px rgba(20, 14, 8, 0.08);
+  --background: #f4f4f5;
+  --background-strong: #fafafa;
+  --panel: rgba(255, 255, 255, 0.86);
+  --panel-strong: #ffffff;
+  --foreground: #18181b;
+  --muted: #71717a;
+  --line: rgba(24, 24, 27, 0.1);
+  --line-strong: rgba(24, 24, 27, 0.24);
+  --accent: #27272a;
+  --accent-strong: #18181b;
+  --accent-soft: rgba(39, 39, 42, 0.1);
+  --sidebar: #0f0f11;
+  --sidebar-foreground: #f4f4f5;
+  --sidebar-muted: #a1a1aa;
+  --shadow-soft: 0 24px 70px rgba(24, 24, 27, 0.08);
+  --shadow-panel: 0 10px 30px rgba(24, 24, 27, 0.08);
 }
 
 html,
@@ -30,9 +30,9 @@ body {
   font-family: var(--font-manrope), ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial,
     sans-serif;
   background-image:
-    radial-gradient(circle at 12% 18%, rgba(216, 120, 27, 0.1), transparent 26%),
-    radial-gradient(circle at 88% 12%, rgba(34, 31, 27, 0.08), transparent 25%),
-    linear-gradient(180deg, #fbf8f2 0%, #f3ede2 45%, #efe7d9 100%);
+    radial-gradient(circle at 12% 18%, rgba(24, 24, 27, 0.08), transparent 28%),
+    radial-gradient(circle at 82% 8%, rgba(24, 24, 27, 0.06), transparent 24%),
+    linear-gradient(180deg, #f8f8f8 0%, #f3f3f5 46%, #eeeeef 100%);
   background-attachment: fixed;
 }
 
@@ -42,11 +42,11 @@ body::before {
   inset: 0;
   pointer-events: none;
   background-image:
-    linear-gradient(rgba(255, 255, 255, 0.34) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.3) 1px, transparent 1px);
+    linear-gradient(rgba(255, 255, 255, 0.4) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.36) 1px, transparent 1px);
   background-size: 120px 120px;
   mask-image: radial-gradient(circle at center, black 35%, transparent 82%);
-  opacity: 0.32;
+  opacity: 0.28;
 }
 
 ::selection {
@@ -56,7 +56,7 @@ body::before {
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(73, 65, 55, 0.28) transparent;
+  scrollbar-color: rgba(63, 63, 70, 0.35) transparent;
   box-sizing: border-box;
 }
 
@@ -66,7 +66,7 @@ body::before {
 }
 
 *::-webkit-scrollbar-thumb {
-  background-color: rgba(73, 65, 55, 0.28);
+  background-color: rgba(63, 63, 70, 0.35);
   border-radius: 999px;
 }
 
@@ -81,8 +81,8 @@ body::before {
 
 .app-shell-grid {
   background-image:
-    radial-gradient(circle at top, rgba(216, 120, 27, 0.12), transparent 28%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, transparent 100%);
+    radial-gradient(circle at top, rgba(24, 24, 27, 0.08), transparent 26%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.26) 0%, transparent 100%);
 }
 
 .markdown p {
@@ -96,8 +96,8 @@ body::before {
 }
 
 .markdown code {
-  border: 1px solid rgba(31, 26, 20, 0.09);
-  background: rgba(255, 250, 242, 0.92);
+  border: 1px solid rgba(24, 24, 27, 0.11);
+  background: rgba(244, 244, 245, 0.95);
   border-radius: 0.5rem;
   padding: 0.08rem 0.3rem;
   font-size: 0.82em;
@@ -105,9 +105,9 @@ body::before {
 
 .markdown pre {
   overflow-x: auto;
-  border: 1px solid rgba(31, 26, 20, 0.09);
+  border: 1px solid rgba(24, 24, 27, 0.11);
   border-radius: 1rem;
-  background: rgba(255, 251, 246, 0.96);
+  background: rgba(255, 255, 255, 0.95);
   padding: 0.95rem;
   margin: 0.9rem 0;
 }

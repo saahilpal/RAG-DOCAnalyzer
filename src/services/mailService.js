@@ -164,10 +164,33 @@ async function sendVerificationCodeEmail({ email, otp }) {
   });
 }
 
+async function sendPasswordResetCodeEmail({ email, otp }) {
+  const subject = 'Your password reset code';
+  const expiryMinutes = Math.max(1, Math.round(env.otpExpirySeconds / 60));
+
+  return sendMail({
+    to: email,
+    subject,
+    text: `Your password reset code is ${otp}. It expires in ${expiryMinutes} minutes.`,
+    html: `
+      <div style="font-family: sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; border: 1px solid #e5e5e5; border-radius: 16px; background: #ffffff; color: #171717;">
+        <p style="margin: 0 0 12px; font-size: 14px; color: #525252;">Your password reset code</p>
+        <div style="padding: 16px; border-radius: 12px; background: #f5f5f5; text-align: center; font-size: 32px; font-weight: 700; letter-spacing: 8px;">
+          ${otp}
+        </div>
+        <p style="margin: 16px 0 0; font-size: 14px; color: #525252;">
+          This code expires in ${expiryMinutes} minutes. If you did not request a reset, you can ignore this email.
+        </p>
+      </div>
+    `,
+  });
+}
+
 module.exports = {
   buildEmailPayload,
   resend,
   sendMail,
   sendMailWithRetry,
   sendVerificationCodeEmail,
+  sendPasswordResetCodeEmail,
 };

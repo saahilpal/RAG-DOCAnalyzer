@@ -6,6 +6,8 @@ import { ChatWorkspaceProvider, useChatWorkspace } from '@/hooks/use-chat-worksp
 const apiMocks = vi.hoisted(() => ({
   listChats: vi.fn(),
   createChat: vi.fn(),
+  updateChat: vi.fn(),
+  deleteChat: vi.fn(),
   listMessages: vi.fn(),
   listChatDocuments: vi.fn(),
   streamChatMessage: vi.fn(),
@@ -30,6 +32,7 @@ vi.mock('@/hooks/use-auth', () => ({
 const defaultWorkspaceData = {
   philosophy: 'Chat-first workspace',
   retrievalMode: 'fts' as const,
+  model: 'gemini-1.5-flash-latest',
   workerEnabled: true,
   limits: {
     maxFileSizeMb: 10,
@@ -91,6 +94,7 @@ describe('useChatWorkspace', () => {
           updated_at: new Date().toISOString(),
           last_message: null,
           last_message_at: null,
+          pinned: false,
           attachment_count: 0,
         },
       ],
@@ -153,6 +157,7 @@ describe('useChatWorkspace', () => {
           updated_at: new Date().toISOString(),
           last_message: null,
           last_message_at: null,
+          pinned: false,
           attachment_count: 0,
         },
         {
@@ -162,6 +167,7 @@ describe('useChatWorkspace', () => {
           updated_at: new Date().toISOString(),
           last_message: null,
           last_message_at: null,
+          pinned: false,
           attachment_count: 0,
         },
       ],

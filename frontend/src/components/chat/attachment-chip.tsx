@@ -32,10 +32,10 @@ export function AttachmentChip({ attachment, onRemove }: AttachmentChipProps) {
   return (
     <div
       className={cn(
-        'inline-flex max-w-full items-center gap-2 rounded-full border px-3 py-2 text-xs font-medium shadow-[0_8px_20px_rgba(18,14,10,0.05)]',
+        'inline-flex max-w-full items-center gap-2 rounded-full border px-3 py-2 text-xs font-medium shadow-[0_8px_20px_rgba(24,24,27,0.05)]',
         failed
-          ? 'border-[rgba(143,45,18,0.16)] bg-[rgba(143,45,18,0.07)] text-[#7d2a12]'
-          : 'border-[color:var(--line)] bg-[rgba(255,252,247,0.92)] text-[var(--foreground)]',
+          ? 'border-[rgba(153,27,27,0.2)] bg-[rgba(153,27,27,0.08)] text-[#7f1d1d]'
+          : 'border-[color:var(--line)] bg-[var(--panel-strong)] text-[var(--foreground)]',
       )}
     >
       {loading ? (
@@ -48,7 +48,7 @@ export function AttachmentChip({ attachment, onRemove }: AttachmentChipProps) {
 
       <div className="flex min-w-0 flex-col leading-tight">
         <span className="max-w-40 truncate">{attachment.file_name}</span>
-        <span className={cn('max-w-44 truncate text-[11px]', failed ? 'text-[#8f2d12]/70' : 'text-[var(--muted)]')}>
+        <span className={cn('max-w-44 truncate text-[11px]', failed ? 'text-[#7f1d1d]/70' : 'text-[var(--muted)]')}>
           {statusLabel(attachment)}
         </span>
       </div>
@@ -56,7 +56,7 @@ export function AttachmentChip({ attachment, onRemove }: AttachmentChipProps) {
       <button
         type="button"
         onClick={() => onRemove(attachment.id)}
-        className="rounded-full p-0.5 text-[var(--muted)] transition hover:bg-[rgba(23,20,17,0.06)] hover:text-[var(--foreground)]"
+        className="rounded-full p-0.5 text-[var(--muted)] transition hover:bg-[rgba(24,24,27,0.06)] hover:text-[var(--foreground)]"
         aria-label={`Remove ${attachment.file_name}`}
       >
         <X size={12} />

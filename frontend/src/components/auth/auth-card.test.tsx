@@ -5,9 +5,12 @@ import { ApiError } from '@/lib/api';
 import { AuthCard } from '@/components/auth/auth-card';
 
 const authMocks = vi.hoisted(() => ({
-  requestOtpForEmail: vi.fn(),
-  resendOtpForEmail: vi.fn(),
-  verifyOtpCode: vi.fn(),
+  signUpWithPassword: vi.fn(),
+  resendSignupVerification: vi.fn(),
+  verifySignupCode: vi.fn(),
+  signInWithPassword: vi.fn(),
+  requestPasswordResetCode: vi.fn(),
+  resetPasswordWithCode: vi.fn(),
 }));
 
 const routerMocks = vi.hoisted(() => ({
@@ -27,39 +30,53 @@ describe('AuthCard', () => {
     vi.clearAllMocks();
     window.sessionStorage.clear();
 
-    authMocks.requestOtpForEmail.mockResolvedValue({
+    authMocks.signUpWithPassword.mockResolvedValue({
       message: 'Verification code sent.',
       expiresInSeconds: 300,
       resendCooldownSeconds: 60,
     });
-    authMocks.resendOtpForEmail.mockResolvedValue({
+    authMocks.resendSignupVerification.mockResolvedValue({
       message: 'Fresh verification code sent.',
       expiresInSeconds: 300,
       resendCooldownSeconds: 60,
     });
-    authMocks.verifyOtpCode.mockResolvedValue(undefined);
+    authMocks.verifySignupCode.mockResolvedValue(undefined);
+    authMocks.signInWithPassword.mockResolvedValue(undefined);
+    authMocks.requestPasswordResetCode.mockResolvedValue({
+      message: 'Reset code sent.',
+      expiresInSeconds: 300,
+      resendCooldownSeconds: 60,
+    });
+    authMocks.resetPasswordWithCode.mockResolvedValue(undefined);
   });
 
-  it('pastes a full OTP and auto-submits it', async () => {
-    render(<AuthCard />);
+  it('submits signup then verifies OTP code', async () => {
+    render(<AuthCard mode="signup" />);
 
-    fireEvent.change(screen.getByLabelText(/email/i), {
+    fireEvent.change(screen.getByLabelText(/^email$/i), {
       target: { value: 'user@example.com' },
     });
-    fireEvent.submit(screen.getByRole('button', { name: /send verification code/i }).closest('form')!);
-
-    await screen.findByText(/enter verification code/i);
-
-    const firstDigitInput = screen.getByLabelText('Digit 1');
-
-    fireEvent.paste(firstDigitInput, {
-      clipboardData: {
-        getData: () => '123456',
-      },
+    fireEvent.change(screen.getByLabelText(/^password$/i), {
+      target: { value: 'SecurePass123' },
+    });
+    fireEvent.change(screen.getByLabelText(/confirm password/i), {
+      target: { value: 'SecurePass123' },
     });
 
+    fireEvent.click(screen.getByRole('button', { name: /create account/i }));
+
+    await screen.findByText(/verify your email/i);
+
+    for (let index = 1; index <= 6; index += 1) {
+      fireEvent.change(screen.getByLabelText(`Digit ${index}`), {
+        target: { value: String(index) },
+      });
+    }
+
+    fireEvent.click(screen.getByRole('button', { name: /verify/i }));
+
     await waitFor(() => {
-      expect(authMocks.verifyOtpCode).toHaveBeenCalledWith('user@example.com', '123456');
+      expect(authMocks.verifySignupCode).toHaveBeenCalledWith('user@example.com', '123456');
     });
 
     await waitFor(() => {
@@ -67,34 +84,25 @@ describe('AuthCard', () => {
     });
   });
 
-  it('shows friendly OTP errors and clears the code after a failed auto-submit', async () => {
-    authMocks.verifyOtpCode.mockRejectedValue(
-      new ApiError('Expired', {
+  it('shows friendly login error on invalid credentials', async () => {
+    authMocks.signInWithPassword.mockRejectedValue(
+      new ApiError('Invalid', {
         status: 401,
-        code: 'OTP_EXPIRED',
+        code: 'AUTH_INVALID_CREDENTIALS',
       }),
     );
 
-    render(<AuthCard />);
+    render(<AuthCard mode="login" />);
 
-    fireEvent.change(screen.getByLabelText(/email/i), {
+    fireEvent.change(screen.getByLabelText(/^email$/i), {
       target: { value: 'user@example.com' },
     });
-    fireEvent.submit(screen.getByRole('button', { name: /send verification code/i }).closest('form')!);
-
-    await screen.findByText(/enter verification code/i);
-
-    fireEvent.paste(screen.getByLabelText('Digit 1'), {
-      clipboardData: {
-        getData: () => '123456',
-      },
+    fireEvent.change(screen.getByLabelText(/^password$/i), {
+      target: { value: 'wrongpassword' },
     });
 
-    await screen.findByText('That code expired. Request a new one and try again.');
+    fireEvent.click(screen.getByRole('button', { name: /sign in/i }));
 
-    await waitFor(() => {
-      expect((screen.getByLabelText('Digit 1') as HTMLInputElement).value).toBe('');
-      expect((screen.getByLabelText('Digit 6') as HTMLInputElement).value).toBe('');
-    });
+    await screen.findByText('Email or password is incorrect.');
   });
 });

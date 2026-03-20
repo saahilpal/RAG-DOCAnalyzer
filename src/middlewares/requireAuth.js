@@ -36,7 +36,7 @@ function requireAuth(req, res, next) {
     }
 
     if (error?.name === 'TokenExpiredError') {
-      return next(new AppError(401, 'AUTH_EXPIRED', 'Your session expired. Request a new code to continue.'));
+      return next(new AppError(401, 'AUTH_EXPIRED', 'Your session expired. Please sign in again.'));
     }
 
     if (error?.name === 'JsonWebTokenError' || error?.name === 'NotBeforeError') {

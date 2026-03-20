@@ -35,6 +35,26 @@ async function getChat(req, res) {
   return ok(res, { chat });
 }
 
+async function updateChat(req, res) {
+  const chat = await chatService.updateOwnedChat({
+    userId: req.auth.userId,
+    chatId: req.params.chatId,
+    title: req.body.title,
+    pinned: req.body.pinned,
+  });
+
+  return ok(res, { chat });
+}
+
+async function deleteChat(req, res) {
+  const deleted = await chatService.deleteOwnedChat({
+    userId: req.auth.userId,
+    chatId: req.params.chatId,
+  });
+
+  return ok(res, { deleted });
+}
+
 async function listMessages(req, res) {
   const messages = await chatService.listChatMessages({
     userId: req.auth.userId,
@@ -201,6 +221,8 @@ module.exports = {
   listChats,
   createChat,
   getChat,
+  updateChat,
+  deleteChat,
   listMessages,
   listDocuments,
   uploadDocument,

@@ -9,7 +9,7 @@ export function TypingIndicator() {
       initial={{ opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
       transition={transitions.panelEnter}
-      className="inline-flex items-center gap-2 rounded-full border border-[color:var(--line)] bg-[rgba(255,252,247,0.92)] px-4 py-2 text-sm text-[var(--muted)] shadow-[0_10px_24px_rgba(18,14,10,0.08)]"
+      className="inline-flex items-center gap-2 rounded-full border border-[color:var(--line)] bg-[var(--panel-strong)] px-4 py-2 text-sm text-[var(--muted)] shadow-[var(--shadow-panel)]"
     >
       <span>Thinking</span>
       <span className="flex items-center gap-1">

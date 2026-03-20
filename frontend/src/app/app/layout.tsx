@@ -18,8 +18,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   if (loading || !user) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-neutral-50">
-        <div className="rounded-xl border border-neutral-200 bg-white px-4 py-2 text-sm text-neutral-600">
+      <div className="flex min-h-screen items-center justify-center bg-[var(--background)]">
+        <div className="rounded-xl border border-[color:var(--line)] bg-[var(--panel-strong)] px-4 py-2 text-sm text-[var(--muted)]">
           Loading workspace...
         </div>
       </div>

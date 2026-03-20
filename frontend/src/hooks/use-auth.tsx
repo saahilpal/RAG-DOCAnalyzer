@@ -1,24 +1,33 @@
 'use client';
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { ApiError, getMe, requestOtp, resendOtp, signOut, verifyOtp, type User } from '@/lib/api';
+import {
+  ApiError,
+  changePassword,
+  getMe,
+  requestPasswordReset,
+  resendVerification,
+  resetPassword,
+  signIn,
+  signOut,
+  signUp,
+  verifySignup,
+  type OtpDeliveryMeta,
+  type User,
+} from '@/lib/api';
 
 const AUTH_NOTICE_STORAGE_KEY = 'auth_notice';
 
 type AuthContextValue = {
   user: User | null;
   loading: boolean;
-  requestOtpForEmail: (email: string) => Promise<{
-    message: string;
-    expiresInSeconds: number;
-    resendCooldownSeconds: number;
-  }>;
-  resendOtpForEmail: (email: string) => Promise<{
-    message: string;
-    expiresInSeconds: number;
-    resendCooldownSeconds: number;
-  }>;
-  verifyOtpCode: (email: string, otp: string) => Promise<void>;
+  signUpWithPassword: (email: string, password: string) => Promise<OtpDeliveryMeta>;
+  resendSignupVerification: (email: string) => Promise<OtpDeliveryMeta>;
+  verifySignupCode: (email: string, otp: string) => Promise<void>;
+  signInWithPassword: (email: string, password: string) => Promise<void>;
+  requestPasswordResetCode: (email: string) => Promise<OtpDeliveryMeta>;
+  resetPasswordWithCode: (email: string, otp: string, newPassword: string) => Promise<void>;
+  changePasswordForUser: (currentPassword: string, newPassword: string) => Promise<void>;
   signOutUser: () => Promise<void>;
   refreshUser: () => Promise<void>;
 };
@@ -41,7 +50,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (typeof window !== 'undefined') {
       window.sessionStorage.setItem(
         AUTH_NOTICE_STORAGE_KEY,
-        error.message || 'Your session expired. Request a new code to continue.',
+        error.message || 'Your session expired. Please sign in again.',
       );
     }
 
@@ -93,8 +102,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     function handleAuthExpired(event: Event) {
       const customEvent = event as CustomEvent<{ message?: string }>;
-      const message =
-        customEvent.detail?.message || 'Your session expired. Request a new code to continue.';
+      const message = customEvent.detail?.message || 'Your session expired. Please sign in again.';
 
       if (typeof window !== 'undefined') {
         window.sessionStorage.setItem(AUTH_NOTICE_STORAGE_KEY, message);
@@ -115,17 +123,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  const requestOtpForEmail = useCallback(async (email: string) => {
-    return requestOtp(email);
+  const signUpWithPassword = useCallback(async (email: string, password: string) => {
+    return signUp(email, password);
   }, []);
 
-  const resendOtpForEmail = useCallback(async (email: string) => {
-    return resendOtp(email);
+  const resendSignupVerification = useCallback(async (email: string) => {
+    return resendVerification(email);
   }, []);
 
-  const verifyOtpCode = useCallback(async (email: string, otp: string) => {
-    const data = await verifyOtp(email, otp);
+  const verifySignupCode = useCallback(async (email: string, otp: string) => {
+    const data = await verifySignup(email, otp);
     setUser(data.user);
+  }, []);
+
+  const signInWithPassword = useCallback(async (email: string, password: string) => {
+    const data = await signIn(email, password);
+    setUser(data.user);
+  }, []);
+
+  const requestPasswordResetCode = useCallback(async (email: string) => {
+    return requestPasswordReset(email);
+  }, []);
+
+  const resetPasswordWithCode = useCallback(async (email: string, otp: string, newPassword: string) => {
+    await resetPassword(email, otp, newPassword);
+  }, []);
+
+  const changePasswordForUser = useCallback(async (currentPassword: string, newPassword: string) => {
+    await changePassword(currentPassword, newPassword);
   }, []);
 
   const signOutUser = useCallback(async () => {
@@ -140,13 +165,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     () => ({
       user,
       loading,
-      requestOtpForEmail,
-      resendOtpForEmail,
-      verifyOtpCode,
+      signUpWithPassword,
+      resendSignupVerification,
+      verifySignupCode,
+      signInWithPassword,
+      requestPasswordResetCode,
+      resetPasswordWithCode,
+      changePasswordForUser,
       signOutUser,
       refreshUser,
     }),
-    [loading, refreshUser, requestOtpForEmail, resendOtpForEmail, signOutUser, user, verifyOtpCode],
+    [
+      changePasswordForUser,
+      loading,
+      refreshUser,
+      requestPasswordResetCode,
+      resendSignupVerification,
+      resetPasswordWithCode,
+      signInWithPassword,
+      signOutUser,
+      signUpWithPassword,
+      user,
+      verifySignupCode,
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

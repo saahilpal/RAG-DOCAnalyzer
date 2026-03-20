@@ -8,6 +8,7 @@ export type User = {
 export type ChatRecord = {
   id: string;
   title: string;
+  pinned: boolean;
   created_at: string;
   updated_at: string;
   last_message?: string | null;
@@ -53,6 +54,12 @@ export type WorkspaceLimits = {
   otpMaxRequestsPerHour?: number;
   otpRequestIpRateLimitMax?: number;
   otpVerifyIpRateLimitMax?: number;
+};
+
+export type OtpDeliveryMeta = {
+  message: string;
+  expiresInSeconds: number;
+  resendCooldownSeconds: number;
 };
 
 type ApiSuccess<T> = {
@@ -168,32 +175,52 @@ export function getMe() {
   return request<{ user: User }>('/api/v1/auth/me');
 }
 
-export function requestOtp(email: string) {
-  return request<{
-    message: string;
-    expiresInSeconds: number;
-    resendCooldownSeconds: number;
-  }>('/api/v1/auth/request-otp', {
+export function signUp(email: string, password: string) {
+  return request<OtpDeliveryMeta>('/api/v1/auth/signup', {
+    method: 'POST',
+    body: JSON.stringify({ email, password }),
+  });
+}
+
+export function resendVerification(email: string) {
+  return request<OtpDeliveryMeta>('/api/v1/auth/resend-verification', {
     method: 'POST',
     body: JSON.stringify({ email }),
   });
 }
 
-export function resendOtp(email: string) {
-  return request<{
-    message: string;
-    expiresInSeconds: number;
-    resendCooldownSeconds: number;
-  }>('/api/v1/auth/resend-otp', {
-    method: 'POST',
-    body: JSON.stringify({ email }),
-  });
-}
-
-export function verifyOtp(email: string, otp: string) {
-  return request<{ user: User; token: string }>('/api/v1/auth/verify-otp', {
+export function verifySignup(email: string, otp: string) {
+  return request<{ user: User; token: string }>('/api/v1/auth/verify-signup', {
     method: 'POST',
     body: JSON.stringify({ email, otp }),
+  });
+}
+
+export function signIn(email: string, password: string) {
+  return request<{ user: User; token: string }>('/api/v1/auth/login', {
+    method: 'POST',
+    body: JSON.stringify({ email, password }),
+  });
+}
+
+export function requestPasswordReset(email: string) {
+  return request<OtpDeliveryMeta>('/api/v1/auth/request-password-reset', {
+    method: 'POST',
+    body: JSON.stringify({ email }),
+  });
+}
+
+export function resetPassword(email: string, otp: string, newPassword: string) {
+  return request<{ passwordReset: boolean }>('/api/v1/auth/reset-password', {
+    method: 'POST',
+    body: JSON.stringify({ email, otp, newPassword }),
+  });
+}
+
+export function changePassword(currentPassword: string, newPassword: string) {
+  return request<{ passwordUpdated: boolean }>('/api/v1/auth/change-password', {
+    method: 'POST',
+    body: JSON.stringify({ currentPassword, newPassword }),
   });
 }
 
@@ -218,6 +245,19 @@ export function createChat(title?: string) {
 
 export function getChat(chatId: string) {
   return request<{ chat: ChatRecord }>(`/api/v1/chats/${chatId}`);
+}
+
+export function updateChat(chatId: string, payload: { title?: string; pinned?: boolean }) {
+  return request<{ chat: ChatRecord }>(`/api/v1/chats/${chatId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteChat(chatId: string) {
+  return request<{ deleted: { id: string } }>(`/api/v1/chats/${chatId}`, {
+    method: 'DELETE',
+  });
 }
 
 export function listMessages(chatId: string, limit = 200, signal?: AbortSignal) {
@@ -294,6 +334,7 @@ export function getWorkspaceLimits() {
   return request<{
     philosophy: string;
     retrievalMode: 'fts' | 'vector';
+    model: string;
     workerEnabled: boolean;
     limits: WorkspaceLimits;
     links: {

@@ -50,7 +50,7 @@ export function Dropdown({ items, align = 'right', buttonClassName }: DropdownPr
         type="button"
         onClick={() => setOpen((prev) => !prev)}
         className={cn(
-          'rounded-xl border border-transparent p-2 text-[var(--muted)] transition hover:bg-[rgba(255,255,255,0.08)] hover:text-[var(--foreground)]',
+          'rounded-xl border border-transparent p-2 text-[var(--muted)] transition hover:bg-[rgba(24,24,27,0.08)] hover:text-[var(--foreground)]',
           buttonClassName,
         )}
         aria-label="Open menu"
@@ -66,13 +66,13 @@ export function Dropdown({ items, align = 'right', buttonClassName }: DropdownPr
             exit={{ opacity: 0, y: 2 }}
             transition={transitions.dropdown}
             className={cn(
-              'absolute z-30 mt-2 min-w-48 rounded-2xl border border-[color:var(--line)] bg-[rgba(255,252,247,0.98)] py-1.5 shadow-[0_18px_48px_rgba(18,14,10,0.16)] backdrop-blur',
+              'absolute z-30 mt-2 min-w-48 rounded-2xl border border-[color:var(--line)] bg-[var(--panel-strong)] py-1.5 shadow-[0_18px_48px_rgba(24,24,27,0.16)] backdrop-blur',
               align === 'right' ? 'right-0' : 'left-0',
             )}
           >
             {items.map((item, index) => {
               if (item.type === 'separator') {
-                return <div key={`sep-${index}`} className="my-1 border-t border-neutral-100" />;
+                return <div key={`sep-${index}`} className="my-1 border-t border-[color:var(--line)]" />;
               }
 
               return (
@@ -84,8 +84,8 @@ export function Dropdown({ items, align = 'right', buttonClassName }: DropdownPr
                     'flex w-full items-center px-3 py-2.5 text-left text-sm transition',
                     item.disabled 
                       ? 'cursor-default opacity-60 text-[var(--muted)] font-medium' 
-                      : 'text-[var(--foreground)] hover:bg-[rgba(23,20,17,0.05)]',
-                    item.destructive && !item.disabled && 'text-[#8f2d12]',
+                      : 'text-[var(--foreground)] hover:bg-[rgba(24,24,27,0.05)]',
+                    item.destructive && !item.disabled && 'text-[#991b1b]',
                   )}
                   onClick={() => {
                     if (item.onSelect) {
