@@ -46,7 +46,7 @@ CREATE TABLE IF NOT EXISTS documents (
   storage_path TEXT NOT NULL,
   file_url TEXT NOT NULL,
   document_hash TEXT NOT NULL,
-  status TEXT NOT NULL CHECK (status IN ('uploading', 'processing', 'indexed', 'failed')),
+  status TEXT NOT NULL DEFAULT 'uploading' CHECK (status IN ('uploading', 'processing', 'indexed', 'failed')),
   page_count INTEGER NOT NULL DEFAULT 0,
   chunk_count INTEGER NOT NULL DEFAULT 0,
   last_error TEXT,
@@ -62,6 +62,28 @@ CREATE TABLE IF NOT EXISTS chat_documents (
   attached_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   PRIMARY KEY (chat_id, document_id)
 );
+
+CREATE OR REPLACE FUNCTION limit_chat_documents()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF (
+    SELECT COUNT(*)
+    FROM chat_documents
+    WHERE chat_id = NEW.chat_id
+  ) >= 3 THEN
+    RAISE EXCEPTION 'A chat can have at most 3 documents attached';
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_limit_chat_documents ON chat_documents;
+
+CREATE TRIGGER trg_limit_chat_documents
+BEFORE INSERT ON chat_documents
+FOR EACH ROW
+EXECUTE FUNCTION limit_chat_documents();
 
 CREATE TABLE IF NOT EXISTS chunks (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -97,6 +119,7 @@ CREATE INDEX IF NOT EXISTS idx_messages_chat_id ON messages(chat_id);
 CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_documents_user_id ON documents(user_id);
 CREATE INDEX IF NOT EXISTS idx_documents_status ON documents(status);
+CREATE INDEX IF NOT EXISTS idx_documents_status_processing ON documents(status) WHERE status = 'processing';
 CREATE INDEX IF NOT EXISTS idx_documents_processing_started_at ON documents(processing_started_at);
 CREATE INDEX IF NOT EXISTS idx_chat_documents_document_id ON chat_documents(document_id);
 CREATE INDEX IF NOT EXISTS idx_chunks_document_id ON chunks(document_id);
@@ -105,6 +128,10 @@ CREATE INDEX IF NOT EXISTS idx_daily_chat_usage_date ON daily_chat_usage(usage_d
 CREATE INDEX IF NOT EXISTS idx_otp_codes_email ON otp_codes(email);
 CREATE INDEX IF NOT EXISTS idx_otp_codes_expires_at ON otp_codes(expires_at);
 CREATE INDEX IF NOT EXISTS idx_otp_codes_email_created_at ON otp_codes(email, created_at DESC);
+
+-- Backend cleanup query:
+-- DELETE FROM otp_codes
+-- WHERE expires_at < NOW() OR consumed_at IS NOT NULL;
 
 DO $$
 BEGIN
