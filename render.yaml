@@ -106,7 +106,7 @@ services:
       - key: RESEND_API_KEY
         sync: false
       - key: RESEND_FROM
-        value: '"DocAnalyzer" <noreply@example.com>'
+        value: 'DocAnalyzer <onboarding@resend.dev>'
       - key: MAIL_RETRY_ATTEMPTS
         value: 3
       - key: MAIL_RETRY_BACKOFF_MS

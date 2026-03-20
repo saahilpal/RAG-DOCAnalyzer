@@ -6,30 +6,12 @@ const logger = require('../config/logger');
 const { AppError } = require('../utils/errors');
 
 const RETRYABLE_PROVIDER_CODES = new Set(['application_error', 'internal_server_error', 'rate_limit_exceeded']);
-const UNAVAILABLE_PROVIDER_CODES = new Set([
-  'missing_api_key',
-  'invalid_api_key',
-  'restricted_api_key',
-  'invalid_from_address',
-]);
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 function sleep(ms) {
   return new Promise((resolve) => {
     setTimeout(resolve, ms);
   });
-}
-
-function createUnavailableMailProvider() {
-  return {
-    name: 'unconfigured',
-    async send() {
-      throw new AppError(
-        503,
-        'EMAIL_DELIVERY_UNAVAILABLE',
-        'Email delivery is not configured right now. Please try again later.',
-      );
-    },
-  };
 }
 
 function getProviderErrorCode(error) {
@@ -56,18 +38,6 @@ function normalizeProviderError(error) {
   const providerCode = getProviderErrorCode(error);
   const providerStatusCode = getProviderStatusCode(error);
 
-  if (UNAVAILABLE_PROVIDER_CODES.has(providerCode)) {
-    const unavailableError = new AppError(
-      503,
-      'EMAIL_DELIVERY_UNAVAILABLE',
-      'Email delivery is not configured right now. Please try again later.',
-    );
-    unavailableError.providerCode = providerCode;
-    unavailableError.providerStatusCode = providerStatusCode;
-    unavailableError.retryable = false;
-    return unavailableError;
-  }
-
   const normalizedError = new Error(error?.message || 'Email delivery failed.');
   normalizedError.code = providerCode || 'email_delivery_error';
   normalizedError.providerCode = providerCode || null;
@@ -80,45 +50,18 @@ function normalizeProviderError(error) {
   return normalizedError;
 }
 
-function createResendMailProvider(client = new Resend(env.resend.apiKey), fromAddress = env.resend.from) {
-  const resendClient = client;
-
+function buildEmailPayload({ to, subject, text, html }) {
   return {
-    name: 'resend',
-    async send({ to, subject, text, html }, options = {}) {
-      const { data, error } = await resendClient.emails.send(
-        {
-          from: fromAddress,
-          to,
-          subject,
-          text,
-          html,
-        },
-        options.idempotencyKey ? { idempotencyKey: options.idempotencyKey } : undefined,
-      );
-
-      if (error) {
-        throw normalizeProviderError(error);
-      }
-
-      return {
-        messageId: data?.id || null,
-        providerResponse: data || null,
-      };
-    },
+    from: process.env.RESEND_FROM || 'DocAnalyzer <onboarding@resend.dev>',
+    to,
+    subject,
+    html,
+    ...(text ? { text } : {}),
   };
 }
 
-function createMailProvider(config = env.resend, client = null) {
-  if (!config.apiKey || !config.from) {
-    return createUnavailableMailProvider();
-  }
-
-  return createResendMailProvider(client || new Resend(config.apiKey), config.from);
-}
-
 async function sendMailWithRetry(message, options = {}) {
-  const provider = options.provider || createMailProvider();
+  const resendClient = options.client || resend;
   const retryAttempts = options.retryAttempts ?? env.mail.retryAttempts;
   const retryBackoffMs = options.retryBackoffMs ?? env.mail.retryBackoffMs;
   const idempotencyKey = options.idempotencyKey || randomUUID();
@@ -126,24 +69,34 @@ async function sendMailWithRetry(message, options = {}) {
 
   for (let attempt = 1; attempt <= retryAttempts; attempt += 1) {
     try {
-      const info = await provider.send(message, { idempotencyKey });
+      const { data, error } = await resendClient.emails.send(
+        buildEmailPayload(message),
+        { idempotencyKey },
+      );
+
+      if (error) {
+        throw normalizeProviderError(error);
+      }
 
       logger.info('Email sent', {
-        provider: provider.name,
+        provider: 'resend',
         to: message.to,
         subject: message.subject,
-        messageId: info?.messageId || null,
+        messageId: data?.id || null,
         attempt,
         idempotencyKey,
       });
 
-      return info;
+      return {
+        messageId: data?.id || null,
+        providerResponse: data || null,
+      };
     } catch (error) {
       const normalizedError = normalizeProviderError(error);
       lastError = normalizedError;
 
       logger.warn('Email send attempt failed', {
-        provider: provider.name,
+        provider: 'resend',
         to: message.to,
         subject: message.subject,
         attempt,
@@ -155,20 +108,6 @@ async function sendMailWithRetry(message, options = {}) {
         idempotencyKey,
       });
 
-      if (normalizedError instanceof AppError && normalizedError.code === 'EMAIL_DELIVERY_UNAVAILABLE') {
-        logger.error('Email delivery is unavailable', {
-          provider: provider.name,
-          to: message.to,
-          subject: message.subject,
-          code: normalizedError.code,
-          providerCode: getProviderErrorCode(normalizedError),
-          statusCode: getProviderStatusCode(normalizedError),
-          message: normalizedError.message,
-          idempotencyKey,
-        });
-        throw normalizedError;
-      }
-
       if (!normalizedError.retryable || attempt >= retryAttempts) {
         break;
       }
@@ -178,7 +117,7 @@ async function sendMailWithRetry(message, options = {}) {
   }
 
   logger.error('Email delivery failed after retries', {
-    provider: provider.name,
+    provider: 'resend',
     to: message.to,
     subject: message.subject,
     retryAttempts,
@@ -226,8 +165,8 @@ async function sendVerificationCodeEmail({ email, otp }) {
 }
 
 module.exports = {
-  createMailProvider,
-  createResendMailProvider,
+  buildEmailPayload,
+  resend,
   sendMail,
   sendMailWithRetry,
   sendVerificationCodeEmail,

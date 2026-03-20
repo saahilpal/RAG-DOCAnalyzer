@@ -68,7 +68,7 @@ const envSchema = z.object({
   RUN_LOCALLY_GUIDE_URL: z.string().url().default('https://github.com/saahilpal/RAG-DOCAnalyzer#quick-start'),
 
   RESEND_API_KEY: z.string().optional(),
-  RESEND_FROM: z.string().optional().default('"DocAnalyzer" <noreply@example.com>'),
+  RESEND_FROM: z.string().optional().default('DocAnalyzer <onboarding@resend.dev>'),
   MAIL_RETRY_ATTEMPTS: z.coerce.number().int().positive().default(3),
   MAIL_RETRY_BACKOFF_MS: z.coerce.number().int().positive().default(300),
 });
@@ -83,6 +83,11 @@ if (!parsed.success) {
 }
 
 const env = parsed.data;
+const resendApiKey = String(process.env.RESEND_API_KEY || '').trim();
+
+if (!resendApiKey) {
+  throw new Error('Invalid environment configuration:\nRESEND_API_KEY is required');
+}
 
 if (env.RAG_CHUNK_OVERLAP_TOKENS >= env.RAG_CHUNK_TOKENS) {
   throw new Error(
@@ -152,7 +157,7 @@ module.exports = {
   runLocallyGuideUrl: env.RUN_LOCALLY_GUIDE_URL,
 
   resend: {
-    apiKey: env.RESEND_API_KEY,
+    apiKey: resendApiKey,
     from: env.RESEND_FROM,
   },
   mail: {

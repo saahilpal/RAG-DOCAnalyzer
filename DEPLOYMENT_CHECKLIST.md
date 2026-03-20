@@ -53,7 +53,7 @@ Follow these exact steps to deploy a production-ready instance of **RAG-DOCAnaly
     *   `JWT_SECRET`: (A long, random string for auth security)
     *   `CORS_ORIGIN`: (Initially `*` or your Vercel URL once deployed)
     *   `RESEND_API_KEY`: (Your Resend API key)
-    *   `RESEND_FROM`: (A verified sender, for example `"DocAnalyzer" <noreply@yourdomain.com>`)
+    *   `RESEND_FROM`: (A verified sender, for example `DocAnalyzer <onboarding@resend.dev>` or your verified domain sender)
 4.  **Wait for Deployment**: Render will build and deploy your backend. Note your service URL (e.g., `https://backend.onrender.com`).
 
 ---

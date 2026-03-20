@@ -1,3 +1,14 @@
+const resendApiKeyConfigured = Boolean(String(process.env.RESEND_API_KEY || '').trim());
+
+process.stdout.write(
+  `${JSON.stringify({
+    ts: new Date().toISOString(),
+    level: 'info',
+    message: 'Resend configuration',
+    meta: { resendApiKeyConfigured },
+  })}\n`,
+);
+
 const app = require('./app');
 const env = require('./config/env');
 const logger = require('./config/logger');
