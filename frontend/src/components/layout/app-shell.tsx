@@ -22,12 +22,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const quotaLimit = chatQuota?.limit ?? null;
   const quotaLabel =
     remainingQuota != null && quotaLimit != null ? `${remainingQuota} left of ${quotaLimit}` : 'Usage loading';
-  const initials = user?.email.slice(0, 2).toUpperCase() || 'DA';
 
   return (
     <div className="app-shell-grid flex h-screen bg-[var(--background)] text-[var(--foreground)]">
       <div className="hidden h-full lg:block">
-        <Sidebar />
+        <Sidebar onOpenSettings={() => setSettingsOpen(true)} />
       </div>
 
       <AnimatePresence>
@@ -48,41 +47,49 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               transition={transitions.panelEnter}
               onClick={(event) => event.stopPropagation()}
             >
-              <Sidebar onNavigate={() => setSidebarOpen(false)} />
+              <Sidebar
+                onNavigate={() => setSidebarOpen(false)}
+                onOpenSettings={() => {
+                  setSidebarOpen(false);
+                  setSettingsOpen(true);
+                }}
+              />
             </motion.div>
           </motion.div>
         ) : null}
       </AnimatePresence>
 
       <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
-        <header className="glass-panel z-20 flex h-16 items-center justify-between border-b border-[color:var(--line)] px-4 md:px-6">
+        <header className="z-20 flex h-14 items-center justify-between border-b border-[color:var(--line)] bg-[var(--panel)] px-3 md:px-5">
           <div className="flex min-w-0 items-center gap-3">
             <Button variant="secondary" size="icon" className="lg:hidden" onClick={() => setSidebarOpen(true)}>
               <Menu size={16} />
             </Button>
 
             <div className="min-w-0">
-              <p className="text-[11px] uppercase tracking-[0.22em] text-[var(--muted)]">Workspace</p>
-              <p className="truncate font-display text-sm font-semibold text-[var(--foreground)] md:text-base">
+              <p className="text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">Workspace</p>
+              <p className="truncate text-sm font-medium text-[var(--foreground)] md:text-sm">
                 {activeChat?.title || 'New chat'}
               </p>
             </div>
           </div>
 
           <div className="flex items-center gap-2 md:gap-3">
-            <div className="hidden items-center gap-2 rounded-full border border-[color:var(--line)] bg-[var(--panel-strong)] px-3 py-1.5 text-xs text-[var(--muted)] shadow-[var(--shadow-panel)] sm:inline-flex">
+            <div className="hidden items-center gap-2 rounded-md border border-[color:var(--line)] bg-[var(--panel-strong)] px-2.5 py-1.5 text-xs text-[var(--muted)] sm:inline-flex">
               <span className={`h-2 w-2 rounded-full ${readyStatus.ai ? 'bg-neutral-900' : 'bg-neutral-400'}`} />
               <span>{quotaLabel}</span>
             </div>
 
-            <button
+            <Button
               type="button"
+              variant="secondary"
+              size="icon"
+              className="lg:hidden"
               onClick={() => setSettingsOpen(true)}
-              className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-[color:var(--line)] bg-[var(--panel-strong)] text-sm font-semibold text-[var(--foreground)] shadow-[var(--shadow-panel)] transition hover:-translate-y-0.5"
               aria-label="Open settings panel"
             >
-              {initials}
-            </button>
+              <Settings2 size={16} />
+            </Button>
           </div>
         </header>
 
@@ -99,8 +106,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             transition={transitions.overlay}
             onClick={() => setSettingsOpen(false)}
           >
-            <motion.aside
-              className="absolute right-0 top-0 h-full w-full max-w-md border-l border-[color:var(--line)] bg-[var(--panel)] p-6 shadow-[var(--shadow-soft)] backdrop-blur-2xl"
+          <motion.aside
+              className="absolute right-0 top-0 h-full w-full max-w-md border-l border-[color:var(--line)] bg-[var(--panel)] p-5"
               initial={{ x: 40, opacity: 0 }}
               animate={{ x: 0, opacity: 1 }}
               exit={{ x: 24, opacity: 0 }}
@@ -110,45 +117,45 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <div className="flex h-full flex-col">
                 <div className="flex items-start justify-between gap-4">
                   <div>
-                    <p className="text-[11px] uppercase tracking-[0.22em] text-[var(--muted)]">Settings</p>
-                    <h2 className="font-display text-2xl font-semibold text-[var(--foreground)]">Your account</h2>
+                    <p className="text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">Settings</p>
+                    <h2 className="text-xl font-semibold text-[var(--foreground)]">Your account</h2>
                   </div>
                   <Button variant="ghost" size="icon" onClick={() => setSettingsOpen(false)}>
                     <span className="text-lg leading-none">×</span>
                   </Button>
                 </div>
 
-                <div className="mt-7 space-y-4">
-                  <div className="rounded-[20px] border border-[color:var(--line)] bg-[var(--panel-strong)] p-5 shadow-[var(--shadow-panel)]">
-                    <p className="text-[11px] uppercase tracking-[0.22em] text-[var(--muted)]">Email</p>
-                    <p className="mt-3 text-base font-semibold text-[var(--foreground)]">{user?.email}</p>
+                <div className="mt-6 space-y-3">
+                  <div className="rounded-md border border-[color:var(--line)] bg-[var(--panel-strong)] p-4">
+                    <p className="text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">Email</p>
+                    <p className="mt-2 text-sm font-medium text-[var(--foreground)]">{user?.email}</p>
                   </div>
 
-                  <div className="rounded-[20px] border border-[color:var(--line)] bg-[var(--panel-strong)] p-5 shadow-[var(--shadow-panel)]">
-                    <p className="text-[11px] uppercase tracking-[0.22em] text-[var(--muted)]">Model</p>
-                    <p className="mt-3 text-sm font-semibold text-[var(--foreground)]">{modelName || 'Loading model...'}</p>
+                  <div className="rounded-md border border-[color:var(--line)] bg-[var(--panel-strong)] p-4">
+                    <p className="text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">Model</p>
+                    <p className="mt-2 text-sm font-medium text-[var(--foreground)]">{modelName || 'Loading model...'}</p>
                   </div>
 
-                  <div className="rounded-[20px] border border-[color:var(--line)] bg-[var(--panel-strong)] p-5 shadow-[var(--shadow-panel)]">
+                  <div className="rounded-md border border-[color:var(--line)] bg-[var(--panel-strong)] p-4">
                     <div className="flex items-center justify-between gap-4">
                       <div>
-                        <p className="text-[11px] uppercase tracking-[0.22em] text-[var(--muted)]">Remaining usage</p>
-                        <p className="mt-3 font-display text-3xl font-semibold text-[var(--foreground)]">
+                        <p className="text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">Remaining usage</p>
+                        <p className="mt-2 text-2xl font-semibold text-[var(--foreground)]">
                           {remainingQuota ?? '--'}
                         </p>
                       </div>
-                      <div className="rounded-full border border-[color:var(--line)] px-3 py-1 text-xs font-semibold text-[var(--muted)]">
+                      <div className="rounded-md border border-[color:var(--line)] px-2.5 py-1 text-xs font-medium text-[var(--muted)]">
                         {quotaLimit ? `${chatQuota?.used || 0}/${quotaLimit}` : '...'}
                       </div>
                     </div>
                   </div>
 
-                  <div className="rounded-[20px] border border-[color:var(--line)] bg-[var(--panel-strong)] p-5 shadow-[var(--shadow-panel)]">
-                    <p className="text-[11px] uppercase tracking-[0.22em] text-[var(--muted)]">Actions</p>
-                    <div className="mt-3 space-y-2">
+                  <div className="rounded-md border border-[color:var(--line)] bg-[var(--panel-strong)] p-4">
+                    <p className="text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">Actions</p>
+                    <div className="mt-2 space-y-2">
                       <Link
                         href={`/forgot-password?email=${encodeURIComponent(user?.email || '')}`}
-                        className="inline-flex w-full items-center justify-between rounded-xl border border-[color:var(--line)] px-3 py-2 text-sm font-medium text-[var(--foreground)] transition hover:bg-[rgba(255,255,255,0.55)]"
+                        className="inline-flex w-full items-center justify-between rounded-md border border-[color:var(--line)] px-3 py-2 text-sm font-medium text-[var(--foreground)] transition-colors duration-150 hover:bg-[var(--panel-muted)]"
                       >
                         Reset password
                         <Settings2 size={14} />
@@ -156,7 +163,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                       <Link
                         href={runLocallyGuideUrl}
                         target="_blank"
-                        className="inline-flex w-full items-center justify-between rounded-xl border border-[color:var(--line)] px-3 py-2 text-sm font-medium text-[var(--foreground)] transition hover:bg-[rgba(255,255,255,0.55)]"
+                        className="inline-flex w-full items-center justify-between rounded-md border border-[color:var(--line)] px-3 py-2 text-sm font-medium text-[var(--foreground)] transition-colors duration-150 hover:bg-[var(--panel-muted)]"
                       >
                         Run locally for unlimited usage
                         <ExternalLink size={14} />
@@ -164,9 +171,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     </div>
                   </div>
 
-                  <div className="rounded-[20px] border border-[color:var(--line)] bg-[var(--panel-strong)] p-5 shadow-[var(--shadow-panel)]">
-                    <p className="text-[11px] uppercase tracking-[0.22em] text-[var(--muted)]">About me</p>
-                    <p className="mt-3 text-sm leading-6 text-[var(--muted)]">
+                  <div className="rounded-md border border-[color:var(--line)] bg-[var(--panel-strong)] p-4">
+                    <p className="text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">About me</p>
+                    <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
                       Built by Sahil Pal. Backend-first engineer focused on resilient systems and polished user
                       experience.
                     </p>
@@ -174,14 +181,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                       <Link
                         href="https://github.com/saahilpal"
                         target="_blank"
-                        className="inline-flex rounded-lg border border-[color:var(--line)] px-3 py-1.5 text-xs font-medium text-[var(--foreground)]"
+                        className="inline-flex rounded-md border border-[color:var(--line)] px-2.5 py-1 text-xs font-medium text-[var(--foreground)]"
                       >
                         GitHub
                       </Link>
                       <Link
                         href="https://www.linkedin.com/in/sahiilpal"
                         target="_blank"
-                        className="inline-flex rounded-lg border border-[color:var(--line)] px-3 py-1.5 text-xs font-medium text-[var(--foreground)]"
+                        className="inline-flex rounded-md border border-[color:var(--line)] px-2.5 py-1 text-xs font-medium text-[var(--foreground)]"
                       >
                         LinkedIn
                       </Link>

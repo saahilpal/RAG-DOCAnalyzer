@@ -10,6 +10,7 @@ import {
   useState,
 } from 'react';
 import {
+  ApiError,
   createChat,
   deleteChat as deleteChatRequest,
   getChatQuota,
@@ -45,6 +46,8 @@ type StreamingMessage = {
   content: string;
 };
 
+type SendPhase = 'idle' | 'loading' | 'retrying' | 'failed';
+
 type ChatWorkspaceContextValue = {
   chats: WorkspaceChatRecord[];
   activeChatId: string | null;
@@ -55,7 +58,10 @@ type ChatWorkspaceContextValue = {
   loadingChats: boolean;
   loadingThread: boolean;
   sending: boolean;
+  sendPhase: SendPhase;
+  retryCount: number;
   composerError: string;
+  canRetryLastMessage: boolean;
   chatQuota: { used: number; remaining: number; limit: number } | null;
   workspaceLimits: WorkspaceLimits | null;
   workspaceMessage: string;
@@ -70,6 +76,8 @@ type ChatWorkspaceContextValue = {
   deleteChat: (chatId: string) => Promise<void>;
   togglePinnedChat: (chatId: string) => Promise<void>;
   sendMessage: (content: string) => Promise<void>;
+  retryLastMessage: () => Promise<void>;
+  clearComposerError: () => void;
   attachFile: (file: File) => Promise<void>;
   removeAttachment: (documentId: string) => Promise<void>;
   refreshChats: () => Promise<void>;
@@ -78,6 +86,8 @@ type ChatWorkspaceContextValue = {
 const ChatWorkspaceContext = createContext<ChatWorkspaceContextValue | null>(null);
 
 const DEFAULT_REPOSITORY_URL = 'https://github.com/saahilpal/RAG-DOCAnalyzer';
+const AUTO_RETRY_ATTEMPTS = 1;
+const AUTO_RETRY_DELAY_MS = 750;
 
 function createTempAttachment(file: File): AttachmentChip {
   const now = new Date().toISOString();
@@ -106,6 +116,74 @@ function randomClientMessageId() {
   return `msg-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
+function wait(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isRetryableStreamError(error: unknown) {
+  if (error instanceof ApiError) {
+    if (error.status === 0 || error.status === 429 || error.status >= 500) {
+      return true;
+    }
+
+    if (error.code === 'STREAM_FAILED' || error.code === 'STREAM_ABORTED' || error.code === 'NETWORK_ERROR') {
+      return true;
+    }
+  }
+
+  if (!(error instanceof Error)) {
+    return true;
+  }
+
+  const message = error.message.toLowerCase();
+  return (
+    message.includes('temporarily unavailable') ||
+    message.includes('network') ||
+    message.includes('timeout') ||
+    message.includes('stream')
+  );
+}
+
+function formatStreamFailureMessage(error: unknown, retried: boolean) {
+  if (error instanceof ApiError) {
+    if (error.code === 'DOCUMENTS_NOT_READY') {
+      return 'Your files are still indexing. Please wait until one file is ready, then retry.';
+    }
+
+    if (error.code === 'DUPLICATE_MESSAGE') {
+      return 'This message was already sent. Refresh the chat and continue from the latest reply.';
+    }
+
+    if (error.code === 'NETWORK_ERROR' || error.status === 0) {
+      return retried
+        ? 'Connection dropped again after retrying once. Please retry manually.'
+        : 'Connection dropped while generating. Please retry.';
+    }
+
+    const apiMessage = error.message.toLowerCase();
+    if (apiMessage.includes('temporarily unavailable')) {
+      return retried
+        ? 'The AI service is still unavailable after one automatic retry. Please retry manually.'
+        : 'The AI service is temporarily unavailable. Please retry.';
+    }
+  }
+
+  if (error instanceof Error && error.message) {
+    const message = error.message.toLowerCase();
+    if (message.includes('temporarily unavailable')) {
+      return retried
+        ? 'The AI service is still unavailable after one automatic retry. Please retry manually.'
+        : 'The AI service is temporarily unavailable. Please retry.';
+    }
+
+    return error.message;
+  }
+
+  return retried
+    ? 'The response failed after an automatic retry. Please try again.'
+    : 'We could not complete the response. Please try again.';
+}
+
 export function ChatWorkspaceProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
 
@@ -117,7 +195,10 @@ export function ChatWorkspaceProvider({ children }: { children: React.ReactNode 
   const [loadingChats, setLoadingChats] = useState(false);
   const [loadingThread, setLoadingThread] = useState(false);
   const [sending, setSending] = useState(false);
+  const [sendPhase, setSendPhase] = useState<SendPhase>('idle');
+  const [retryCount, setRetryCount] = useState(0);
   const [composerError, setComposerError] = useState('');
+  const [lastFailedMessage, setLastFailedMessage] = useState<{ chatId: string; content: string } | null>(null);
 
   const [workspaceLimits, setWorkspaceLimits] = useState<WorkspaceLimits | null>(null);
   const [workspaceMessage, setWorkspaceMessage] = useState(
@@ -145,7 +226,10 @@ export function ChatWorkspaceProvider({ children }: { children: React.ReactNode 
       setActiveChatId(null);
       setServerMessages([]);
       setStreamingMessage(null);
+      setSendPhase('idle');
+      setRetryCount(0);
       setAttachments([]);
+      setLastFailedMessage(null);
       return;
     }
 
@@ -272,8 +356,11 @@ export function ChatWorkspaceProvider({ children }: { children: React.ReactNode 
     setActiveChatId(data.chat.id);
     setServerMessages([]);
     setStreamingMessage(null);
+    setSendPhase('idle');
+    setRetryCount(0);
     setAttachments([]);
     setComposerError('');
+    setLastFailedMessage(null);
     return data.chat.id;
   }, []);
 
@@ -289,7 +376,10 @@ export function ChatWorkspaceProvider({ children }: { children: React.ReactNode 
 
     setStreamingMessage(null);
     setSending(false);
+    setSendPhase('idle');
+    setRetryCount(0);
     setComposerError('');
+    setLastFailedMessage(null);
     setActiveChatId(chatId);
   }, []);
 
@@ -301,20 +391,29 @@ export function ChatWorkspaceProvider({ children }: { children: React.ReactNode 
     return createNewChat();
   }, [createNewChat]);
 
+  const clearComposerError = useCallback(() => {
+    setComposerError('');
+  }, []);
+
   const sendMessage = useCallback(
-    async (content: string) => {
+    async (content: string, targetChatId?: string) => {
       const trimmed = content.trim();
       if (!trimmed) {
         return;
       }
 
-      const chatId = await ensureActiveChat();
-      const clientMessageId = randomClientMessageId();
+      const chatId = targetChatId || (await ensureActiveChat());
+      let clientMessageId = randomClientMessageId();
       const optimisticMessageId = `temp-${clientMessageId}`;
       let metaReceived = false;
+      let attemptsUsed = 0;
+      let lastError: unknown = null;
 
       setComposerError('');
+      setLastFailedMessage(null);
+      setRetryCount(0);
       setSending(true);
+      setSendPhase('loading');
       setServerMessages((current) => [
         ...current,
         {
@@ -328,67 +427,129 @@ export function ChatWorkspaceProvider({ children }: { children: React.ReactNode 
       ]);
       setStreamingMessage({ role: 'assistant', content: '' });
 
-      const controller = new AbortController();
-      activeStreamAbortRef.current = controller;
-
       try {
-        await streamChatMessage(
-          chatId,
-          { content: trimmed, clientMessageId },
-          async (event) => {
-            if (event.type === 'chat.meta') {
-              metaReceived = true;
-              setServerMessages((current) =>
-                current.map((message) =>
-                  message.id === optimisticMessageId
-                    ? {
-                        ...message,
-                        id: event.data.userMessageId,
-                        chat_id: event.data.chatId,
-                      }
-                    : message,
-                ),
-              );
-              return;
+        while (attemptsUsed <= AUTO_RETRY_ATTEMPTS) {
+          let metaReceivedThisAttempt = false;
+          let completed = false;
+          const controller = new AbortController();
+          activeStreamAbortRef.current = controller;
+
+          try {
+            await streamChatMessage(
+              chatId,
+              { content: trimmed, clientMessageId },
+              async (event) => {
+                if (event.type === 'chat.meta') {
+                  metaReceived = true;
+                  metaReceivedThisAttempt = true;
+                  setServerMessages((current) =>
+                    current.map((message) =>
+                      message.id === optimisticMessageId
+                        ? {
+                            ...message,
+                            id: event.data.userMessageId,
+                            chat_id: event.data.chatId,
+                          }
+                        : message,
+                    ),
+                  );
+                  return;
+                }
+
+                if (event.type === 'assistant.delta') {
+                  setStreamingMessage((current) => ({
+                    role: 'assistant',
+                    content: `${current?.content || ''}${event.data.text || ''}`,
+                  }));
+                  return;
+                }
+
+                if (event.type === 'assistant.completed') {
+                  completed = true;
+                  setStreamingMessage(null);
+                  setServerMessages((current) => [...current, event.data.assistantMessage]);
+                  setChatQuota(event.data.quota);
+                  setLastFailedMessage(null);
+                  setRetryCount(0);
+                  setSendPhase('idle');
+                  await refreshChats();
+                }
+              },
+              controller.signal,
+            );
+
+            if (!completed) {
+              throw new ApiError('The response ended before completion.', {
+                code: 'STREAM_ABORTED',
+              });
             }
 
-            if (event.type === 'assistant.delta') {
-              setStreamingMessage((current) => ({
-                role: 'assistant',
-                content: `${current?.content || ''}${event.data.text || ''}`,
-              }));
-              return;
-            }
-
-            if (event.type === 'assistant.completed') {
+            return;
+          } catch (error) {
+            if (isAbortError(error)) {
+              setSendPhase('idle');
+              setComposerError('');
+              setLastFailedMessage(null);
               setStreamingMessage(null);
-              setServerMessages((current) => [...current, event.data.assistantMessage]);
-              setChatQuota(event.data.quota);
-              await refreshChats();
+
+              if (!metaReceived) {
+                setServerMessages((current) => current.filter((message) => message.id !== optimisticMessageId));
+              }
+
+              return;
             }
-          },
-          controller.signal,
-        );
-      } catch (error) {
-        if (!isAbortError(error)) {
-          setComposerError(error instanceof Error ? error.message : 'Failed to send message.');
+
+            lastError = error;
+
+            const shouldRetry =
+              !metaReceived &&
+              !metaReceivedThisAttempt &&
+              attemptsUsed < AUTO_RETRY_ATTEMPTS &&
+              isRetryableStreamError(error);
+
+            if (shouldRetry) {
+              attemptsUsed += 1;
+              clientMessageId = randomClientMessageId();
+              setRetryCount(attemptsUsed);
+              setSendPhase('retrying');
+              await wait(AUTO_RETRY_DELAY_MS);
+              continue;
+            }
+
+            break;
+          } finally {
+            if (activeStreamAbortRef.current === controller) {
+              activeStreamAbortRef.current = null;
+            }
+          }
         }
 
+        setSendPhase('failed');
+        setComposerError(formatStreamFailureMessage(lastError, attemptsUsed > 0));
+        setLastFailedMessage({ chatId, content: trimmed });
         setStreamingMessage(null);
 
         if (!metaReceived) {
           setServerMessages((current) => current.filter((message) => message.id !== optimisticMessageId));
         }
       } finally {
-        if (activeStreamAbortRef.current === controller) {
-          activeStreamAbortRef.current = null;
-        }
-
         setSending(false);
       }
     },
     [ensureActiveChat, refreshChats],
   );
+
+  const retryLastMessage = useCallback(async () => {
+    if (!lastFailedMessage || sending) {
+      return;
+    }
+
+    if (activeChatIdRef.current !== lastFailedMessage.chatId) {
+      setActiveChatId(lastFailedMessage.chatId);
+    }
+
+    await sendMessage(lastFailedMessage.content, lastFailedMessage.chatId);
+  }, [lastFailedMessage, sendMessage, sending]);
 
   const attachFile = useCallback(
     async (file: File) => {
@@ -493,10 +654,13 @@ export function ChatWorkspaceProvider({ children }: { children: React.ReactNode 
     await deleteChatRequest(chatId);
 
     setServerChats((current) => current.filter((chat) => chat.id !== chatId));
+    setLastFailedMessage((current) => (current?.chatId === chatId ? null : current));
     if (activeChatIdRef.current === chatId) {
       setActiveChatId((current) => (current === chatId ? null : current));
       setServerMessages([]);
       setStreamingMessage(null);
+      setSendPhase('idle');
+      setRetryCount(0);
       setAttachments((current) => current.filter((document) => document.isTemp && document.status === 'failed'));
     }
   }, []);
@@ -524,6 +688,8 @@ export function ChatWorkspaceProvider({ children }: { children: React.ReactNode 
     if (!activeChatId) {
       setServerMessages([]);
       setStreamingMessage(null);
+      setSendPhase('idle');
+      setRetryCount(0);
       setAttachments((current) => current.filter((document) => document.isTemp && document.status === 'failed'));
       return;
     }
@@ -608,6 +774,7 @@ export function ChatWorkspaceProvider({ children }: { children: React.ReactNode 
     () => chats.find((chat) => chat.id === activeChatId) || null,
     [activeChatId, chats],
   );
+  const canRetryLastMessage = Boolean(lastFailedMessage);
 
   const value = useMemo<ChatWorkspaceContextValue>(
     () => ({
@@ -620,7 +787,10 @@ export function ChatWorkspaceProvider({ children }: { children: React.ReactNode 
       loadingChats,
       loadingThread,
       sending,
+      sendPhase,
+      retryCount,
       composerError,
+      canRetryLastMessage,
       chatQuota,
       workspaceLimits,
       workspaceMessage,
@@ -635,6 +805,8 @@ export function ChatWorkspaceProvider({ children }: { children: React.ReactNode 
       deleteChat,
       togglePinnedChat,
       sendMessage,
+      retryLastMessage,
+      clearComposerError,
       attachFile,
       removeAttachment,
       refreshChats,
@@ -646,6 +818,8 @@ export function ChatWorkspaceProvider({ children }: { children: React.ReactNode 
       attachFile,
       chatQuota,
       chats,
+      clearComposerError,
+      canRetryLastMessage,
       composerError,
       createNewChat,
       deleteChat,
@@ -653,6 +827,8 @@ export function ChatWorkspaceProvider({ children }: { children: React.ReactNode 
       loadingThread,
       modelName,
       refreshChats,
+      retryCount,
+      retryLastMessage,
       readyStatus,
       removeAttachment,
       renameChat,
@@ -661,6 +837,7 @@ export function ChatWorkspaceProvider({ children }: { children: React.ReactNode 
       runLocallyGuideUrl,
       selectChat,
       sendMessage,
+      sendPhase,
       sending,
       serverMessages,
       streamingMessage,

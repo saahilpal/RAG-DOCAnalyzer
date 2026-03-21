@@ -1,5 +1,6 @@
 'use client';
 
+import { memo } from 'react';
 import { FileText, Loader2, TriangleAlert, X } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import type { AttachmentChip as AttachmentChipRecord } from '@/hooks/use-chat-workspace';
@@ -25,14 +26,14 @@ function statusLabel(attachment: AttachmentChipRecord) {
   return 'Ready';
 }
 
-export function AttachmentChip({ attachment, onRemove }: AttachmentChipProps) {
+function AttachmentChipComponent({ attachment, onRemove }: AttachmentChipProps) {
   const loading = attachment.status === 'uploading' || attachment.status === 'processing';
   const failed = attachment.status === 'failed';
 
   return (
     <div
       className={cn(
-        'inline-flex max-w-full items-center gap-2 rounded-full border px-3 py-2 text-xs font-medium shadow-[0_8px_20px_rgba(24,24,27,0.05)]',
+        'inline-flex max-w-full items-center gap-2 rounded-md border px-2.5 py-1.5 text-xs font-medium',
         failed
           ? 'border-[rgba(153,27,27,0.2)] bg-[rgba(153,27,27,0.08)] text-[#7f1d1d]'
           : 'border-[color:var(--line)] bg-[var(--panel-strong)] text-[var(--foreground)]',
@@ -64,3 +65,5 @@ export function AttachmentChip({ attachment, onRemove }: AttachmentChipProps) {
     </div>
   );
 }
+
+export const AttachmentChip = memo(AttachmentChipComponent);

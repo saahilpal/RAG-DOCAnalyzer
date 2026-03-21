@@ -8,18 +8,18 @@ type ButtonSize = 'sm' | 'md' | 'lg' | 'icon';
 
 const variantClasses: Record<ButtonVariant, string> = {
   primary:
-    'border border-[var(--foreground)] bg-[var(--foreground)] text-[var(--background-strong)] hover:-translate-y-0.5 hover:bg-[#09090b] hover:shadow-[0_14px_28px_rgba(24,24,27,0.18)]',
+    'border border-[var(--foreground)] bg-[var(--foreground)] text-[var(--background-strong)] hover:bg-[#0f0f0f]',
   secondary:
-    'border border-[color:var(--line)] bg-[var(--panel-strong)] text-[var(--foreground)] hover:-translate-y-0.5 hover:bg-white hover:shadow-[0_10px_20px_rgba(24,24,27,0.08)]',
-  ghost: 'border border-transparent bg-transparent text-[var(--muted)] hover:bg-[rgba(24,24,27,0.05)] hover:text-[var(--foreground)]',
-  danger: 'border border-[#991b1b] bg-[#991b1b] text-white hover:-translate-y-0.5 hover:bg-[#7f1d1d]',
+    'border border-[color:var(--line)] bg-[var(--panel-strong)] text-[var(--foreground)] hover:bg-[var(--panel-muted)]',
+  ghost: 'border border-transparent bg-transparent text-[var(--muted)] hover:bg-[var(--panel-muted)] hover:text-[var(--foreground)]',
+  danger: 'border border-[#991b1b] bg-[#991b1b] text-white hover:bg-[#7f1d1d]',
 };
 
 const sizeClasses: Record<ButtonSize, string> = {
-  sm: 'h-9 px-3 text-sm',
-  md: 'h-10 px-4 text-sm',
-  lg: 'h-11 px-5 text-base',
-  icon: 'h-10 w-10 p-0',
+  sm: 'h-8 px-3 text-sm',
+  md: 'h-9 px-3.5 text-sm',
+  lg: 'h-10 px-4 text-sm',
+  icon: 'h-9 w-9 p-0',
 };
 
 type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
@@ -35,7 +35,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
     <button
       ref={ref}
       className={cn(
-        'inline-flex items-center justify-center gap-2 rounded-2xl font-medium outline-none transition-[transform,background-color,border-color,color,box-shadow] duration-200 focus-visible:ring-2 focus-visible:ring-[rgba(24,24,27,0.18)] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50',
+        'inline-flex items-center justify-center gap-2 rounded-md font-medium outline-none transition-[background-color,border-color,color,opacity] duration-150 focus-visible:ring-2 focus-visible:ring-[rgba(24,24,27,0.18)] active:opacity-90 disabled:cursor-not-allowed disabled:opacity-50',
         variantClasses[variant],
         sizeClasses[size],
         className,

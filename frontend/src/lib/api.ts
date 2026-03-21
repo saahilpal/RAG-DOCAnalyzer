@@ -490,30 +490,53 @@ export async function streamChatMessage(
   onEvent: (event: ChatStreamEvent) => void | Promise<void>,
   signal?: AbortSignal,
 ) {
-  const response = await fetch(`${API_BASE_URL}/api/v1/chats/${chatId}/messages/stream`, {
-    method: 'POST',
-    credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(payload),
-    signal,
-  });
+  let response: Response;
+
+  try {
+    response = await fetch(`${API_BASE_URL}/api/v1/chats/${chatId}/messages/stream`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+      signal,
+    });
+  } catch (error) {
+    if (isAbortError(error)) {
+      throw error;
+    }
+
+    throw new ApiError('We could not reach the AI service right now.', {
+      status: 0,
+      code: 'NETWORK_ERROR',
+    });
+  }
 
   if (!response.ok) {
     const contentType = response.headers.get('content-type') || '';
     if (contentType.includes('application/json')) {
       const errorPayload = (await response.json()) as ApiResponse<unknown>;
       if (errorPayload.ok === false) {
-        throw new Error(errorPayload.error.message);
+        throw new ApiError(errorPayload.error.message, {
+          status: response.status,
+          code: errorPayload.error.code,
+          details: errorPayload.error.details,
+        });
       }
     }
 
-    throw new Error(`Stream failed (${response.status}).`);
+    throw new ApiError(`Stream failed (${response.status}).`, {
+      status: response.status,
+      code: 'STREAM_FAILED',
+    });
   }
 
   if (!response.body) {
-    throw new Error('Streaming body is unavailable.');
+    throw new ApiError('Streaming body is unavailable.', {
+      status: response.status,
+      code: 'STREAM_BODY_UNAVAILABLE',
+    });
   }
 
   const reader = response.body.getReader();
@@ -550,7 +573,10 @@ export async function streamChatMessage(
       await onEvent(parsedEvent);
 
       if (parsedEvent.type === 'error') {
-        throw new Error(parsedEvent.data.message || 'Streaming failed.');
+        throw new ApiError(parsedEvent.data.message || 'Streaming failed.', {
+          status: response.status,
+          code: parsedEvent.data.code || 'STREAM_ABORTED',
+        });
       }
     }
   }

@@ -4,6 +4,19 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChatWorkspaceProvider, useChatWorkspace } from '@/hooks/use-chat-workspace';
 
 const apiMocks = vi.hoisted(() => ({
+  ApiError: class MockApiError extends Error {
+    status: number;
+    code?: string;
+    details?: unknown;
+
+    constructor(message: string, options?: { status?: number; code?: string; details?: unknown }) {
+      super(message);
+      this.name = 'ApiError';
+      this.status = options?.status || 500;
+      this.code = options?.code;
+      this.details = options?.details;
+    }
+  },
   listChats: vi.fn(),
   createChat: vi.fn(),
   updateChat: vi.fn(),

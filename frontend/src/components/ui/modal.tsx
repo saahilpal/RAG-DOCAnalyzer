@@ -42,7 +42,7 @@ export function Modal({
           <motion.div
             role="dialog"
             aria-modal="true"
-            className="w-full max-w-md rounded-[28px] border border-[color:var(--line)] bg-[var(--panel-strong)] p-6 shadow-[0_32px_100px_rgba(24,24,27,0.22)] backdrop-blur"
+            className="w-full max-w-md rounded-md border border-[color:var(--line)] bg-[var(--panel-strong)] p-5"
             initial={{ y: 16, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 8, opacity: 0 }}
@@ -51,13 +51,13 @@ export function Modal({
           >
             <div className="mb-4 flex items-start justify-between gap-4">
               <div>
-                <h3 className="text-lg font-semibold text-[var(--foreground)]">{title}</h3>
+                <h3 className="text-base font-semibold text-[var(--foreground)]">{title}</h3>
                 {description ? <p className="mt-1 text-sm text-[var(--muted)]">{description}</p> : null}
               </div>
               <button
                 type="button"
                 onClick={onClose}
-                className="rounded-xl p-2 text-[var(--muted)] transition hover:bg-[rgba(24,24,27,0.05)]"
+                className="rounded-md p-1.5 text-[var(--muted)] transition-colors duration-150 hover:bg-[var(--panel-muted)]"
                 aria-label="Close modal"
               >
                 <X size={16} />
