@@ -45,7 +45,7 @@ vi.mock('@/hooks/use-auth', () => ({
 const defaultWorkspaceData = {
   philosophy: 'Chat-first workspace',
   retrievalMode: 'fts' as const,
-  model: 'gemini-1.5-flash-latest',
+  model: 'gemini-2.5-flash',
   workerEnabled: true,
   limits: {
     maxFileSizeMb: 10,

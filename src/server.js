@@ -21,6 +21,10 @@ const server = app.listen(env.port, env.host, () => {
     port: env.port,
     env: env.nodeEnv,
   });
+  logger.info(`Using Gemini model: ${env.geminiModel}`);
+  logger.info(`Using Gemini embedding model: ${env.geminiEmbeddingModel}`, {
+    embeddingDimension: env.embeddingDimension,
+  });
 
   if (env.enableDocumentWorker) {
     startDocumentWorker();

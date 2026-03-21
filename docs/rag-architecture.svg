@@ -42,7 +42,7 @@
 
   <rect x="930" y="212" width="384" height="170" rx="12" fill="white" class="stroke"/>
   <text x="950" y="240" class="box-title">4. Optional Vector Mode</text>
-  <text x="950" y="266" class="box-text">Gemini Embedding: `text-embedding-004`</text>
+  <text x="950" y="266" class="box-text">Gemini Embedding: `gemini-embedding-001`</text>
   <text x="950" y="287" class="box-text">Persist vectors in pgvector column</text>
   <text x="950" y="308" class="box-text">Enabled only when `RETRIEVAL_MODE=vector`</text>
   <text x="950" y="339" class="small">Default stays FTS to reduce API spend</text>
@@ -82,7 +82,7 @@
 
   <rect x="960" y="532" width="354" height="240" rx="12" fill="white" class="stroke"/>
   <text x="980" y="560" class="box-title">4. Generation + Fallback</text>
-  <text x="980" y="586" class="box-text">Gemini `gemini-1.5-flash` over SSE</text>
+  <text x="980" y="586" class="box-text">Gemini `gemini-2.5-flash` over SSE</text>
   <text x="980" y="607" class="box-text">Errors handled explicitly:</text>
   <text x="980" y="628" class="small">- AI_QUOTA_EXCEEDED</text>
   <text x="980" y="648" class="small">- AI_TIMEOUT</text>

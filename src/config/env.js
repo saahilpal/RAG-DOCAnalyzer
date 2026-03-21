@@ -14,8 +14,8 @@ const envSchema = z.object({
   SUPABASE_STORAGE_BUCKET: z.string().min(1).default('documents'),
 
   GEMINI_API_KEY: z.string().min(1),
-  GEMINI_MODEL: z.string().default('gemini-1.5-flash-latest'),
-  GEMINI_EMBEDDING_MODEL: z.string().default('text-embedding-004'),
+  GEMINI_MODEL: z.string().default('gemini-2.5-flash'),
+  GEMINI_EMBEDDING_MODEL: z.string().default('gemini-embedding-001'),
   EMBEDDING_DIMENSION: z.coerce.number().int().positive().default(384),
   AI_TIMEOUT_MS: z.coerce.number().int().positive().default(12_000),
 

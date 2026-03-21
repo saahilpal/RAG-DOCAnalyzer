@@ -32,6 +32,10 @@ function mapGeminiError(error) {
     return new AppError(504, 'AI_TIMEOUT', 'AI request timed out.');
   }
 
+  if (status === 404 || message.includes('model not found')) {
+    return new AppError(503, 'AI_TEMPORARILY_UNAVAILABLE', 'AI service is temporarily unavailable.');
+  }
+
   return new AppError(503, 'AI_TEMPORARILY_UNAVAILABLE', 'AI service is temporarily unavailable.');
 }
 
@@ -69,6 +73,7 @@ async function embedTexts(texts, options = {}) {
               parts: [{ text }],
             },
             taskType,
+            output_dimensionality: env.embeddingDimension,
           }),
           env.aiTimeoutMs,
           'EMBEDDING_TIMEOUT',
@@ -86,6 +91,9 @@ async function embedTexts(texts, options = {}) {
   } catch (error) {
     logger.error('Gemini embedding request failed', {
       model: env.geminiEmbeddingModel,
+      upstreamStatus: error?.status || null,
+      upstreamStatusText: error?.statusText || null,
+      upstreamMessage: error?.message || null,
       error: serializeGeminiError(error),
     });
     throw mapGeminiError(error);
@@ -123,6 +131,9 @@ async function* streamGeneration(prompt, options = {}) {
   } catch (error) {
     logger.error('Gemini generation request failed', {
       model: env.geminiModel,
+      upstreamStatus: error?.status || null,
+      upstreamStatusText: error?.statusText || null,
+      upstreamMessage: error?.message || null,
       error: serializeGeminiError(error),
     });
     throw mapGeminiError(error);
@@ -155,6 +166,9 @@ async function checkGeminiReady() {
   } catch (error) {
     logger.error('Gemini readiness check failed', {
       model: env.geminiModel,
+      upstreamStatus: error?.status || null,
+      upstreamStatusText: error?.statusText || null,
+      upstreamMessage: error?.message || null,
       error: serializeGeminiError(error),
     });
     return false;
