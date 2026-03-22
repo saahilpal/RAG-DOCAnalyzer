@@ -5,9 +5,19 @@ Next.js frontend for the chat-first RAG product.
 ## Pages
 
 - `/` Marketing and product overview
-- `/login` OTP sign-in
+- `/login` Email + password sign-in
+- `/signup` Registration and email verification
+- `/forgot-password` Password reset flow
 - `/app` Main chat workspace
+- `/app/documents` Placeholder documents screen
 - `/app/settings` Workspace diagnostics and links
+
+## UX Notes
+
+- The main workspace is chat-only: no predefined summarize or compare buttons.
+- Uploads appear inside the chat timeline with progress, processing, and ready states.
+- The composer stays locked until one document is ready.
+- The assistant guides users toward specific document questions instead of whole-document requests.
 
 ## Stack
 

@@ -4,8 +4,11 @@ const { AppError } = require('../utils/errors');
 const { toVectorLiteral } = require('../utils/vector');
 const geminiService = require('./geminiService');
 
-const BROAD_QUERY_GUIDANCE =
-  'I work best with specific questions about your document. Try asking about a topic, section, or concept.';
+const NO_DOCUMENT_GUIDANCE = 'Please upload a document to begin.';
+const VAGUE_QUERY_GUIDANCE =
+  "I'm here to help with your document. Try asking about a specific topic or concept from it.";
+const NO_RELEVANT_CONTEXT_GUIDANCE =
+  "I couldn't find relevant information in your document. Try asking something more specific.";
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
@@ -36,7 +39,7 @@ function formatHistory(history) {
 
 function formatContext(chunks) {
   if (!Array.isArray(chunks) || chunks.length === 0) {
-    return 'No uploaded document context attached to this chat.';
+    return 'No relevant document context was retrieved for this question.';
   }
 
   const charLimit = getPromptChunkCharLimit();
@@ -57,14 +60,18 @@ function normalizeUserMessage(userMessage) {
     .trim();
 }
 
-function isUnsupportedBroadQuery(userMessage) {
+function isVagueDocumentQuery(userMessage) {
   const normalized = normalizeUserMessage(userMessage);
 
   if (!normalized) {
     return false;
   }
 
-  const broadPatterns = [
+  const vaguePatterns = [
+    /^(what is this|what s this)$/i,
+    /^explain this$/i,
+    /^tell me about (it|this)$/i,
+    /^what does this mean$/i,
     /\bsummar(?:ize|ise)\b.*\b(entire|whole|full|complete)\b.*\b(document|file|pdf|report)\b/,
     /\b(explain|describe|cover|review)\b.*\b(everything|all of it|the whole thing)\b/,
     /\b(overview|summary)\s+of\s+(this\s+|the\s+)?(document|file|pdf|report)\b/,
@@ -72,7 +79,7 @@ function isUnsupportedBroadQuery(userMessage) {
     /\bwhat is (this|the) document about\b/,
   ];
 
-  return broadPatterns.some((pattern) => pattern.test(normalized));
+  return vaguePatterns.some((pattern) => pattern.test(normalized));
 }
 
 function buildPrompt({ history, chunks, userMessage }) {
@@ -186,21 +193,42 @@ function assertNotAborted(shouldAbort) {
 async function streamAssistantReply({ userId, chatId, history, indexedDocuments, userMessage, onToken, shouldAbort }) {
   assertNotAborted(shouldAbort);
 
-  if (isUnsupportedBroadQuery(userMessage)) {
+  const hasReadyDocument = Array.isArray(indexedDocuments) && indexedDocuments.length > 0;
+
+  if (!hasReadyDocument) {
     if (typeof onToken === 'function') {
-      onToken(BROAD_QUERY_GUIDANCE);
+      onToken(NO_DOCUMENT_GUIDANCE);
     }
 
     return {
-      answer: BROAD_QUERY_GUIDANCE,
+      answer: NO_DOCUMENT_GUIDANCE,
       retrievedChunkCount: 0,
     };
   }
 
-  const chunks =
-    Array.isArray(indexedDocuments) && indexedDocuments.length > 0
-      ? await retrieveRelevantChunks({ userId, chatId, query: userMessage })
-      : [];
+  if (isVagueDocumentQuery(userMessage)) {
+    if (typeof onToken === 'function') {
+      onToken(VAGUE_QUERY_GUIDANCE);
+    }
+
+    return {
+      answer: VAGUE_QUERY_GUIDANCE,
+      retrievedChunkCount: 0,
+    };
+  }
+
+  const chunks = await retrieveRelevantChunks({ userId, chatId, query: userMessage });
+
+  if (chunks.length === 0) {
+    if (typeof onToken === 'function') {
+      onToken(NO_RELEVANT_CONTEXT_GUIDANCE);
+    }
+
+    return {
+      answer: NO_RELEVANT_CONTEXT_GUIDANCE,
+      retrievedChunkCount: 0,
+    };
+  }
 
   const prompt = buildPrompt({
     history: Array.isArray(history) ? history : [],
@@ -230,7 +258,7 @@ async function streamAssistantReply({ userId, chatId, history, indexedDocuments,
 
 module.exports = {
   buildPrompt,
-  isUnsupportedBroadQuery,
+  isVagueDocumentQuery,
   retrieveRelevantChunks,
   streamAssistantReply,
 };

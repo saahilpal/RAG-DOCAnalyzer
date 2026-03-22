@@ -11,7 +11,7 @@ Follow these exact steps to deploy a production-ready instance of **RAG-DOCAnaly
 3.  **Google AI Studio API Key**: For Gemini generation and embeddings.
 4.  **Render Account**: To host the Node.js Express Backend.
 5.  **Vercel Account**: To host the Next.js Frontend.
-6.  **Resend Account** (Required for OTP delivery): Create an API key and verify your sending domain.
+6.  **Gmail Account with App Password**: Required for SMTP-based verification and password reset emails.
 
 ---
 
@@ -22,11 +22,12 @@ Follow these exact steps to deploy a production-ready instance of **RAG-DOCAnaly
     *   Navigate to the **SQL Editor** in your Supabase dashboard.
     *   Open `database/schema.sql` from this repository.
     *   Copy and paste the entire content into a new query and click **Run**.
+    *   Use this only for a fresh or disposable database because the schema recreates core tables.
 3.  **Enable Vector Extension**: (Included in schema.sql, but ensure it's active in **Database > Extensions**).
 4.  **Configure Storage**:
     *   Go to **Storage > Buckets**.
     *   Create a new bucket named `documents`.
-    *   Set the bucket to **Public** (required for easy retrieval via Public URLs).
+    *   Keep the bucket **Private**. The backend reads files with the service role and does not need public URLs.
 5.  **Gather Credentials**:
     *   Go to **Project Settings > Database** to get your **Transaction Connection String** (`DATABASE_URL`).
     *   Go to **Project Settings > API** to get your **Project URL** (`SUPABASE_URL`) and **service_role key** (`SUPABASE_SERVICE_KEY`).
@@ -46,14 +47,17 @@ Follow these exact steps to deploy a production-ready instance of **RAG-DOCAnaly
     *   **Start Command**: `npm start`
 3.  **Set Environment Variables**: Click **Advanced > Add Environment Variable** and add:
     *   `NODE_ENV`: `production`
+    *   `NODE_OPTIONS`: `--dns-result-order=ipv4first`
     *   `DATABASE_URL`: (Your Supabase connection string)
     *   `SUPABASE_URL`: (Your Supabase Project URL)
     *   `SUPABASE_SERVICE_KEY`: (Your Supabase service_role key)
     *   `GEMINI_API_KEY`: (Your Google Gemini API Key)
     *   `JWT_SECRET`: (A long, random string for auth security)
-    *   `CORS_ORIGIN`: (Initially `*` or your Vercel URL once deployed)
-    *   `RESEND_API_KEY`: (Your Resend API key)
-    *   `RESEND_FROM`: (A verified sender, for example `DocAnalyzer <onboarding@resend.dev>` or your verified domain sender)
+    *   `CORS_ORIGIN`: (Your Vercel frontend URL)
+    *   `EMAIL_USER`: (Your Gmail address)
+    *   `EMAIL_PASS`: (A Gmail App Password, not your main account password)
+    *   `EMAIL_FROM`: (A sender string such as `DocAnalyzer <your_gmail_address@gmail.com>`)
+    *   Optional: import the remaining defaults from [`render.yaml`](./render.yaml)
 4.  **Wait for Deployment**: Render will build and deploy your backend. Note your service URL (e.g., `https://backend.onrender.com`).
 
 ---
@@ -86,15 +90,19 @@ Follow these exact steps to deploy a production-ready instance of **RAG-DOCAnaly
 
 1.  **Health Check**: Visit `https://your-backend.onrender.com/api/v1/health/live` (should see `{ "ok": true }`).
 2.  **Ready Check**: Visit `https://your-backend.onrender.com/api/v1/health/ready` (should see `status: ready`).
-3.  **OTP Sign-In**: Request a verification code from the deployed frontend and verify that the code arrives by email.
-4.  **Upload**: Upload a PDF and wait for indexing.
-5.  **Chat**: Ask a question and ensure tokens stream back via SSE.
+3.  **Sign Up**: Create an account, request a verification code, and confirm the code arrives by email.
+4.  **Login**: Sign in with the verified account.
+5.  **Upload**: Upload a PDF and wait for the assistant to show the ready message.
+6.  **Chat**: Ask a specific question and ensure tokens stream back via SSE.
+7.  **Guardrails**: Try a vague prompt such as `what is this` and confirm the app asks for a more specific question.
 
 ---
 
 ## Troubleshooting
 
 *   **Database Errors**: Ensure you used the `service_role` key, not the `anon` key.
-*   **Upload Fails**: Check if the `documents` bucket exists and is public in Supabase Storage.
+*   **Upload Fails**: Check if the `documents` bucket exists, is private, and your backend is using the service role key.
+*   **Email Fails**: Confirm `EMAIL_USER`, `EMAIL_PASS`, and `EMAIL_FROM` are set correctly and that `EMAIL_PASS` is a Gmail App Password.
+*   **Render SMTP IPv6 Errors**: Keep `NODE_OPTIONS=--dns-result-order=ipv4first` in the backend environment.
 *   **CORS Issues**: Double-check `CORS_ORIGIN` in Render matches your Vercel URL exactly (no trailing slash).
 *   **AI Timeouts**: Review your Gemini quota and timeout settings if generation or embedding requests start failing under load.

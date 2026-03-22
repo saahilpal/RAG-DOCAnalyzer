@@ -89,7 +89,7 @@ const DEFAULT_REPOSITORY_URL = 'https://github.com/saahilpal/RAG-DOCAnalyzer';
 const AUTO_RETRY_ATTEMPTS = 1;
 const AUTO_RETRY_DELAY_MS = 750;
 const DOCUMENT_POLL_INTERVAL_MS = 5_000;
-const DOCUMENT_UPLOAD_REQUIRED_MESSAGE = 'Upload a document to start asking questions.';
+const DOCUMENT_UPLOAD_REQUIRED_MESSAGE = 'Please upload a document to begin.';
 const DOCUMENT_PROCESSING_MESSAGE = 'Processing your document... this will take a few seconds.';
 const SINGLE_DOCUMENT_MESSAGE = 'Keep one document attached to this chat to continue.';
 

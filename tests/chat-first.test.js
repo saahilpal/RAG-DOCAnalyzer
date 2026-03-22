@@ -238,13 +238,11 @@ test('rag prompt uses both history and retrieved context for follow-up questions
   assert.match(capturedPrompt, /How does that compare with our roadmap discussion/);
 });
 
-test('rag prompt supports chat without attached documents', async (t) => {
-  let capturedPrompt = '';
-
-  t.mock.method(geminiService, 'streamGeneration', async function* (prompt) {
-    capturedPrompt = prompt;
-    yield 'General answer';
+test('rag guidance is returned when no document is attached', async (t) => {
+  const streamMock = t.mock.method(geminiService, 'streamGeneration', async function* () {
+    throw new Error('should not be called');
   });
+  let streamed = '';
 
   const result = await ragService.streamAssistantReply({
     userId: USER_ID,
@@ -252,11 +250,14 @@ test('rag prompt supports chat without attached documents', async (t) => {
     history: [{ role: 'user', content: 'Help me draft a reply.' }],
     indexedDocuments: [],
     userMessage: 'Make it more concise.',
+    onToken: (token) => {
+      streamed += token;
+    },
   });
 
-  assert.equal(result.answer, 'General answer');
-  assert.match(capturedPrompt, /Help me draft a reply/);
-  assert.match(capturedPrompt, /No uploaded document context attached to this chat/);
+  assert.equal(result.answer, 'Please upload a document to begin.');
+  assert.equal(streamed, result.answer);
+  assert.equal(streamMock.mock.callCount(), 0);
 });
 
 test('broad document requests are guided without calling the model', async (t) => {
@@ -279,7 +280,65 @@ test('broad document requests are guided without calling the model', async (t) =
 
   assert.equal(
     result.answer,
-    'I work best with specific questions about your document. Try asking about a topic, section, or concept.',
+    "I'm here to help with your document. Try asking about a specific topic or concept from it.",
+  );
+  assert.equal(streamed, result.answer);
+  assert.equal(streamMock.mock.callCount(), 0);
+});
+
+test('vague document requests are guided without retrieval or model fallback', async (t) => {
+  const streamMock = t.mock.method(geminiService, 'streamGeneration', async function* () {
+    throw new Error('should not be called');
+  });
+  const queryMock = t.mock.method(db, 'query', async () => {
+    throw new Error('should not be called');
+  });
+  let streamed = '';
+
+  const result = await ragService.streamAssistantReply({
+    userId: USER_ID,
+    chatId: CHAT_ID,
+    history: [],
+    indexedDocuments: [{ id: DOCUMENT_ID }],
+    userMessage: 'What is this?',
+    onToken: (token) => {
+      streamed += token;
+    },
+  });
+
+  assert.equal(
+    result.answer,
+    "I'm here to help with your document. Try asking about a specific topic or concept from it.",
+  );
+  assert.equal(streamed, result.answer);
+  assert.equal(streamMock.mock.callCount(), 0);
+  assert.equal(queryMock.mock.callCount(), 0);
+});
+
+test('missing document matches return guidance without general fallback', async (t) => {
+  const streamMock = t.mock.method(geminiService, 'streamGeneration', async function* () {
+    throw new Error('should not be called');
+  });
+  t.mock.method(db, 'query', async () => ({
+    rowCount: 0,
+    rows: [],
+  }));
+  let streamed = '';
+
+  const result = await ragService.streamAssistantReply({
+    userId: USER_ID,
+    chatId: CHAT_ID,
+    history: [],
+    indexedDocuments: [{ id: DOCUMENT_ID }],
+    userMessage: 'What does the contract say about vacation carryover?',
+    onToken: (token) => {
+      streamed += token;
+    },
+  });
+
+  assert.equal(
+    result.answer,
+    "I couldn't find relevant information in your document. Try asking something more specific.",
   );
   assert.equal(streamed, result.answer);
   assert.equal(streamMock.mock.callCount(), 0);

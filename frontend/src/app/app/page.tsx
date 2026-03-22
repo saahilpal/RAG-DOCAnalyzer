@@ -113,14 +113,14 @@ export default function DashboardChatPage() {
         ? 'Processing document...'
         : hasReadyDocument
           ? ''
-          : 'Upload a document to start asking questions.';
+          : 'Please upload a document to begin.';
   const composerPlaceholder = hasReadyDocument
       ? 'Ask something about your document...'
       : pendingAttachments > 0
         ? 'Processing document...'
         : hasMultipleActiveDocuments
           ? 'Keep one document in this chat'
-        : 'Upload a document to start asking questions';
+        : 'Upload a document to begin';
   const composerDisabled = quotaReached || !hasReadyDocument;
   const attachDisabled = quotaReached || activeAttachments.length >= 1;
 
@@ -201,7 +201,7 @@ export default function DashboardChatPage() {
           ) : (
             <div className="mx-auto flex h-full w-full max-w-[760px] flex-col items-center justify-center px-3 text-center">
               <h1 className="font-display text-3xl font-semibold tracking-tight text-[var(--foreground)] md:text-4xl">
-                Upload a document to start asking questions.
+                Upload a document to begin.
               </h1>
               <p className="mt-2 max-w-xl text-sm leading-6 text-[var(--muted)]">
                 Once it is ready, ask focused questions about a topic, section, or concept.
