@@ -11,6 +11,8 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      - key: NODE_OPTIONS
+        value: --dns-result-order=ipv4first
       - key: HOST
         value: 0.0.0.0
       - key: PORT
@@ -103,10 +105,12 @@ services:
         sync: false
       - key: RUN_LOCALLY_GUIDE_URL
         sync: false
-      - key: RESEND_API_KEY
+      - key: EMAIL_USER
         sync: false
-      - key: RESEND_FROM
-        value: 'DocAnalyzer <onboarding@resend.dev>'
+      - key: EMAIL_PASS
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
       - key: MAIL_RETRY_ATTEMPTS
         value: 3
       - key: MAIL_RETRY_BACKOFF_MS

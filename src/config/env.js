@@ -67,8 +67,9 @@ const envSchema = z.object({
   GITHUB_REPOSITORY_URL: z.string().url().default('https://github.com/saahilpal/RAG-DOCAnalyzer'),
   RUN_LOCALLY_GUIDE_URL: z.string().url().default('https://github.com/saahilpal/RAG-DOCAnalyzer#quick-start'),
 
-  RESEND_API_KEY: z.string().optional(),
-  RESEND_FROM: z.string().optional().default('DocAnalyzer <onboarding@resend.dev>'),
+  EMAIL_USER: z.string().min(1),
+  EMAIL_PASS: z.string().min(1),
+  EMAIL_FROM: z.string().min(1),
   MAIL_RETRY_ATTEMPTS: z.coerce.number().int().positive().default(3),
   MAIL_RETRY_BACKOFF_MS: z.coerce.number().int().positive().default(300),
 });
@@ -83,11 +84,6 @@ if (!parsed.success) {
 }
 
 const env = parsed.data;
-const resendApiKey = String(process.env.RESEND_API_KEY || '').trim();
-
-if (!resendApiKey) {
-  throw new Error('Invalid environment configuration:\nRESEND_API_KEY is required');
-}
 
 if (env.RAG_CHUNK_OVERLAP_TOKENS >= env.RAG_CHUNK_TOKENS) {
   throw new Error(
@@ -156,11 +152,13 @@ module.exports = {
   githubRepositoryUrl: env.GITHUB_REPOSITORY_URL,
   runLocallyGuideUrl: env.RUN_LOCALLY_GUIDE_URL,
 
-  resend: {
-    apiKey: resendApiKey,
-    from: env.RESEND_FROM,
-  },
   mail: {
+    user: env.EMAIL_USER,
+    pass: env.EMAIL_PASS,
+    from: env.EMAIL_FROM,
+    host: 'smtp.gmail.com',
+    port: 587,
+    secure: false,
     retryAttempts: env.MAIL_RETRY_ATTEMPTS,
     retryBackoffMs: env.MAIL_RETRY_BACKOFF_MS,
   },

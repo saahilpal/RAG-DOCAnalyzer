@@ -1,12 +1,34 @@
+const dns = require('node:dns');
 const { randomUUID } = require('node:crypto');
-const { Resend } = require('resend');
+const nodemailer = require('nodemailer');
+
+if (typeof dns.setDefaultResultOrder === 'function') {
+  dns.setDefaultResultOrder('ipv4first');
+}
 
 const env = require('../config/env');
 const logger = require('../config/logger');
 const { AppError } = require('../utils/errors');
 
-const RETRYABLE_PROVIDER_CODES = new Set(['application_error', 'internal_server_error', 'rate_limit_exceeded']);
-const resend = new Resend(process.env.RESEND_API_KEY);
+const CONNECTION_TIMEOUT_MS = 10_000;
+const GREETING_TIMEOUT_MS = 10_000;
+const SOCKET_TIMEOUT_MS = 20_000;
+const RETRYABLE_PROVIDER_CODES = new Set(['econnection', 'esocket', 'etimedout', 'timeout', 'eai_again']);
+const transporter = nodemailer.createTransport({
+  host: env.mail.host,
+  port: env.mail.port,
+  secure: env.mail.secure,
+  auth: {
+    user: env.mail.user,
+    pass: env.mail.pass,
+  },
+  connectionTimeout: CONNECTION_TIMEOUT_MS,
+  greetingTimeout: GREETING_TIMEOUT_MS,
+  socketTimeout: SOCKET_TIMEOUT_MS,
+});
+
+let transporterVerified = false;
+let verifyPromise = null;
 
 function sleep(ms) {
   return new Promise((resolve) => {
@@ -15,17 +37,68 @@ function sleep(ms) {
 }
 
 function getProviderErrorCode(error) {
-  return String(error?.providerCode || error?.code || error?.name || error?.cause?.code || '').toLowerCase();
+  return String(
+    error?.providerCode ||
+      error?.code ||
+      error?.responseCode ||
+      error?.errno ||
+      error?.name ||
+      error?.cause?.code ||
+      '',
+  ).toLowerCase();
 }
 
 function getProviderStatusCode(error) {
-  const statusCode = Number(error?.providerStatusCode ?? error?.statusCode ?? error?.cause?.statusCode);
+  const statusCode = Number(
+    error?.providerStatusCode ??
+      error?.responseCode ??
+      error?.statusCode ??
+      error?.cause?.responseCode ??
+      error?.cause?.statusCode,
+  );
   return Number.isFinite(statusCode) ? statusCode : null;
 }
 
-function isRetryableTransportCode(code) {
-  return ['timeout', 'timedout', 'econnreset', 'econnrefused', 'eai_again', 'enotfound', 'fetch'].some((marker) =>
-    code.includes(marker),
+function getProviderMessageText(error) {
+  return [error?.message, error?.response, error?.cause?.message, error?.cause?.response]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+}
+
+function isRetryableTransportCode(code, message) {
+  return [
+    'timeout',
+    'timedout',
+    'econnreset',
+    'econnrefused',
+    'econnection',
+    'eai_again',
+    'enotfound',
+    'esocket',
+    'edns',
+    'network',
+  ].some((marker) => code.includes(marker) || message.includes(marker));
+}
+
+function isAuthFailure(code, statusCode, message) {
+  return (
+    code.includes('auth') ||
+    [530, 534, 535].includes(statusCode) ||
+    message.includes('invalid login') ||
+    message.includes('username and password not accepted') ||
+    message.includes('authentication failed')
+  );
+}
+
+function isRateLimitedFailure(code, statusCode, message) {
+  return (
+    code.includes('rate') ||
+    [421, 450, 451, 452, 454].includes(statusCode) ||
+    message.includes('rate limit') ||
+    message.includes('too many') ||
+    message.includes('quota exceeded') ||
+    message.includes('daily user sending quota exceeded')
   );
 }
 
@@ -37,22 +110,55 @@ function normalizeProviderError(error) {
 
   const providerCode = getProviderErrorCode(error);
   const providerStatusCode = getProviderStatusCode(error);
+  const providerMessage = getProviderMessageText(error);
 
   const normalizedError = new Error(error?.message || 'Email delivery failed.');
   normalizedError.code = providerCode || 'email_delivery_error';
   normalizedError.providerCode = providerCode || null;
   normalizedError.providerStatusCode = providerStatusCode;
+  normalizedError.command = error?.command || null;
+  normalizedError.response = error?.response || null;
+
+  if (isAuthFailure(providerCode, providerStatusCode, providerMessage)) {
+    normalizedError.code = 'email_auth_failed';
+    normalizedError.publicCode = 'EMAIL_AUTH_FAILED';
+    normalizedError.publicMessage =
+      'We could not send the email because the mail service is temporarily unavailable. Please try again later.';
+    normalizedError.retryable = false;
+    return normalizedError;
+  }
+
+  if (isRateLimitedFailure(providerCode, providerStatusCode, providerMessage)) {
+    normalizedError.code = 'email_rate_limited';
+    normalizedError.publicCode = 'EMAIL_RATE_LIMITED';
+    normalizedError.publicMessage =
+      'We could not send the email right now because the mail provider is throttling requests. Please try again in a few minutes.';
+    normalizedError.retryable = true;
+    return normalizedError;
+  }
+
+  if (RETRYABLE_PROVIDER_CODES.has(providerCode) || isRetryableTransportCode(providerCode, providerMessage)) {
+    normalizedError.code = 'email_connection_failed';
+    normalizedError.publicCode = 'EMAIL_CONNECTION_FAILED';
+    normalizedError.publicMessage =
+      'We could not reach the mail provider right now. Please try again in a moment.';
+    normalizedError.retryable = true;
+    return normalizedError;
+  }
+
+  normalizedError.publicCode = 'EMAIL_DELIVERY_FAILED';
+  normalizedError.publicMessage = 'We could not send the email right now. Please try again in a moment.';
   normalizedError.retryable =
     providerStatusCode === 429 ||
     providerStatusCode >= 500 ||
-    RETRYABLE_PROVIDER_CODES.has(providerCode) ||
-    isRetryableTransportCode(providerCode);
+    providerStatusCode === 421 ||
+    (providerStatusCode >= 450 && providerStatusCode < 500);
   return normalizedError;
 }
 
 function buildEmailPayload({ to, subject, text, html }) {
   return {
-    from: process.env.RESEND_FROM || 'DocAnalyzer <onboarding@resend.dev>',
+    from: env.mail.from,
     to,
     subject,
     html,
@@ -60,35 +166,124 @@ function buildEmailPayload({ to, subject, text, html }) {
   };
 }
 
+async function deliverMessage(client, payload, options = {}) {
+  if (typeof client.sendMail === 'function') {
+    return client.sendMail(payload);
+  }
+
+  const nestedSend = client?.emails?.['send'];
+  if (typeof nestedSend === 'function') {
+    const { data, error } = await nestedSend.call(client.emails, payload, {
+      idempotencyKey: options.idempotencyKey,
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    return {
+      messageId: data?.id || null,
+      accepted: Array.isArray(payload.to) ? payload.to : [payload.to].filter(Boolean),
+      rejected: [],
+      response: null,
+      data: data || null,
+    };
+  }
+
+  throw new TypeError('mailClient.sendMail is not a function');
+}
+
+async function verifyTransporter(options = {}) {
+  const client = options.client || transporter;
+  const reason = options.reason || 'startup';
+
+  if (client !== transporter || typeof client.verify !== 'function') {
+    return true;
+  }
+
+  if (transporterVerified) {
+    return true;
+  }
+
+  if (verifyPromise) {
+    return verifyPromise;
+  }
+
+  verifyPromise = Promise.resolve()
+    .then(() => client.verify())
+    .then(() => {
+      transporterVerified = true;
+      logger.info('SMTP transporter verified', {
+        provider: 'smtp',
+        host: env.mail.host,
+        port: env.mail.port,
+        reason,
+      });
+      return true;
+    })
+    .catch((error) => {
+      const normalizedError = normalizeProviderError(error);
+      transporterVerified = false;
+      logger.error('SMTP transporter verification failed', {
+        provider: 'smtp',
+        host: env.mail.host,
+        port: env.mail.port,
+        reason,
+        code: normalizedError.code,
+        providerCode: normalizedError.providerCode,
+        statusCode: normalizedError.providerStatusCode,
+        command: normalizedError.command,
+        response: normalizedError.response,
+        message: normalizedError.message,
+        stack: error?.stack,
+      });
+      return false;
+    })
+    .finally(() => {
+      verifyPromise = null;
+    });
+
+  return verifyPromise;
+}
+
 async function sendMailWithRetry(message, options = {}) {
-  const resendClient = options.client || resend;
+  const mailClient = options.client || transporter;
   const retryAttempts = options.retryAttempts ?? env.mail.retryAttempts;
   const retryBackoffMs = options.retryBackoffMs ?? env.mail.retryBackoffMs;
   const idempotencyKey = options.idempotencyKey || randomUUID();
   let lastError = null;
 
+  if (mailClient === transporter) {
+    await verifyTransporter({ reason: 'first_send', client: mailClient });
+  }
+
   for (let attempt = 1; attempt <= retryAttempts; attempt += 1) {
     try {
-      const { data, error } = await resendClient.emails.send(
-        buildEmailPayload(message),
+      const data = await deliverMessage(
+        mailClient,
+        {
+          ...buildEmailPayload(message),
+          headers: {
+            'X-Idempotency-Key': idempotencyKey,
+          },
+        },
         { idempotencyKey },
       );
 
-      if (error) {
-        throw normalizeProviderError(error);
-      }
-
       logger.info('Email sent', {
-        provider: 'resend',
+        provider: 'smtp',
         to: message.to,
         subject: message.subject,
-        messageId: data?.id || null,
+        messageId: data?.messageId || null,
         attempt,
         idempotencyKey,
+        accepted: data?.accepted || [],
+        rejected: data?.rejected || [],
+        response: data?.response || null,
       });
 
       return {
-        messageId: data?.id || null,
+        messageId: data?.messageId || null,
         providerResponse: data || null,
       };
     } catch (error) {
@@ -96,16 +291,20 @@ async function sendMailWithRetry(message, options = {}) {
       lastError = normalizedError;
 
       logger.warn('Email send attempt failed', {
-        provider: 'resend',
+        provider: 'smtp',
         to: message.to,
         subject: message.subject,
         attempt,
         retryAttempts,
-        code: getProviderErrorCode(normalizedError),
-        statusCode: getProviderStatusCode(normalizedError),
+        code: normalizedError.code,
+        providerCode: normalizedError.providerCode,
+        statusCode: normalizedError.providerStatusCode,
         retryable: Boolean(normalizedError.retryable),
+        command: normalizedError.command,
+        response: normalizedError.response,
         message: normalizedError.message,
         idempotencyKey,
+        stack: error?.stack,
       });
 
       if (!normalizedError.retryable || attempt >= retryAttempts) {
@@ -117,12 +316,15 @@ async function sendMailWithRetry(message, options = {}) {
   }
 
   logger.error('Email delivery failed after retries', {
-    provider: 'resend',
+    provider: 'smtp',
     to: message.to,
     subject: message.subject,
     retryAttempts,
-    code: getProviderErrorCode(lastError),
-    statusCode: getProviderStatusCode(lastError),
+    code: lastError?.code || null,
+    providerCode: lastError?.providerCode || null,
+    statusCode: lastError?.providerStatusCode ?? null,
+    command: lastError?.command || null,
+    response: lastError?.response || null,
     message: lastError?.message,
     idempotencyKey,
   });
@@ -131,11 +333,13 @@ async function sendMailWithRetry(message, options = {}) {
     throw lastError;
   }
 
-  throw new AppError(
+  const appError = new AppError(
     503,
-    'EMAIL_DELIVERY_FAILED',
-    'We could not send the verification code right now. Please try again in a moment.',
+    lastError?.publicCode || 'EMAIL_DELIVERY_FAILED',
+    lastError?.publicMessage || 'We could not send the email right now. Please try again in a moment.',
   );
+  appError.retryable = Boolean(lastError?.retryable);
+  throw appError;
 }
 
 async function sendMail({ to, subject, text, html }) {
@@ -188,9 +392,14 @@ async function sendPasswordResetCodeEmail({ email, otp }) {
 
 module.exports = {
   buildEmailPayload,
-  resend,
+  transporter,
   sendMail,
   sendMailWithRetry,
   sendVerificationCodeEmail,
   sendPasswordResetCodeEmail,
+  verifyTransporter,
 };
+
+if (env.nodeEnv !== 'test') {
+  void verifyTransporter({ reason: 'startup' });
+}

@@ -1,11 +1,15 @@
-const resendApiKeyConfigured = Boolean(String(process.env.RESEND_API_KEY || '').trim());
+const smtpConfigured = Boolean(
+  String(process.env.EMAIL_USER || '').trim() &&
+    String(process.env.EMAIL_PASS || '').trim() &&
+    String(process.env.EMAIL_FROM || '').trim(),
+);
 
 process.stdout.write(
   `${JSON.stringify({
     ts: new Date().toISOString(),
     level: 'info',
-    message: 'Resend configuration',
-    meta: { resendApiKeyConfigured },
+    message: 'SMTP configuration',
+    meta: { smtpConfigured },
   })}\n`,
 );
 
