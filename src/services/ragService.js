@@ -4,6 +4,9 @@ const { AppError } = require('../utils/errors');
 const { toVectorLiteral } = require('../utils/vector');
 const geminiService = require('./geminiService');
 
+const BROAD_QUERY_GUIDANCE =
+  'I work best with specific questions about your document. Try asking about a topic, section, or concept.';
+
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
@@ -46,11 +49,41 @@ function formatContext(chunks) {
     .join('\n\n');
 }
 
+function normalizeUserMessage(userMessage) {
+  return String(userMessage || '')
+    .toLowerCase()
+    .replace(/[^\w\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function isUnsupportedBroadQuery(userMessage) {
+  const normalized = normalizeUserMessage(userMessage);
+
+  if (!normalized) {
+    return false;
+  }
+
+  const broadPatterns = [
+    /\bsummar(?:ize|ise)\b.*\b(entire|whole|full|complete)\b.*\b(document|file|pdf|report)\b/,
+    /\b(explain|describe|cover|review)\b.*\b(everything|all of it|the whole thing)\b/,
+    /\b(overview|summary)\s+of\s+(this\s+|the\s+)?(document|file|pdf|report)\b/,
+    /\btell me everything\b/,
+    /\bwhat is (this|the) document about\b/,
+  ];
+
+  return broadPatterns.some((pattern) => pattern.test(normalized));
+}
+
 function buildPrompt({ history, chunks, userMessage }) {
   return `SYSTEM:
-You are a helpful assistant in a chat-first RAG workspace.
-Use uploaded document context when it is relevant and available.
-If the documents do not contain enough information, say that clearly and then answer with the best general guidance you can.
+You are a document-grounded assistant in a chat-first workspace.
+Answer only with information supported by the uploaded document context and the current conversation.
+Do not complete broad or global document tasks such as summarizing the whole document, giving a general overview, explaining everything, or telling the user everything in the file.
+If the user's request is too broad, do not answer it. Instead, guide them to ask a more specific question about a topic, section, or concept.
+If the document context does not support the answer, say that clearly and ask the user to narrow the question.
+Do not use general knowledge to fill gaps.
+Use natural, concise language and never mention chunks, embeddings, retrieval, or internal system details.
 Keep continuity with the existing conversation.
 
 CHAT HISTORY:
@@ -153,6 +186,17 @@ function assertNotAborted(shouldAbort) {
 async function streamAssistantReply({ userId, chatId, history, indexedDocuments, userMessage, onToken, shouldAbort }) {
   assertNotAborted(shouldAbort);
 
+  if (isUnsupportedBroadQuery(userMessage)) {
+    if (typeof onToken === 'function') {
+      onToken(BROAD_QUERY_GUIDANCE);
+    }
+
+    return {
+      answer: BROAD_QUERY_GUIDANCE,
+      retrievedChunkCount: 0,
+    };
+  }
+
   const chunks =
     Array.isArray(indexedDocuments) && indexedDocuments.length > 0
       ? await retrieveRelevantChunks({ userId, chatId, query: userMessage })
@@ -186,6 +230,7 @@ async function streamAssistantReply({ userId, chatId, history, indexedDocuments,
 
 module.exports = {
   buildPrompt,
+  isUnsupportedBroadQuery,
   retrieveRelevantChunks,
   streamAssistantReply,
 };

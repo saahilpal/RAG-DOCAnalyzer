@@ -254,6 +254,32 @@ test('rag prompt supports chat without attached documents', async (t) => {
   assert.match(capturedPrompt, /No uploaded document context attached to this chat/);
 });
 
+test('broad document requests are guided without calling the model', async (t) => {
+  const streamMock = t.mock.method(geminiService, 'streamGeneration', async function* () {
+    throw new Error('should not be called');
+  });
+
+  let streamed = '';
+
+  const result = await ragService.streamAssistantReply({
+    userId: USER_ID,
+    chatId: CHAT_ID,
+    history: [],
+    indexedDocuments: [{ id: DOCUMENT_ID }],
+    userMessage: 'Summarize the whole document for me.',
+    onToken: (token) => {
+      streamed += token;
+    },
+  });
+
+  assert.equal(
+    result.answer,
+    'I work best with specific questions about your document. Try asking about a topic, section, or concept.',
+  );
+  assert.equal(streamed, result.answer);
+  assert.equal(streamMock.mock.callCount(), 0);
+});
+
 test('retrieval failures are raised explicitly as RETRIEVAL_FAILED', async (t) => {
   t.mock.method(db, 'query', async () => {
     throw new Error('fts exploded');

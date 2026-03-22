@@ -4,7 +4,6 @@ import { useEffect, useRef } from 'react';
 import { Loader2, Paperclip, SendHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/cn';
-import { AttachmentChip } from '@/components/chat/attachment-chip';
 import type { AttachmentChip as AttachmentChipRecord } from '@/hooks/use-chat-workspace';
 
 type ChatComposerProps = {
@@ -12,10 +11,11 @@ type ChatComposerProps = {
   onChange: (value: string) => void;
   onSubmit: () => void;
   onAttach: (file: File) => Promise<void>;
-  onRemoveAttachment: (documentId: string) => Promise<void>;
   attachments: AttachmentChipRecord[];
   disabled?: boolean;
+  attachDisabled?: boolean;
   loading?: boolean;
+  placeholder?: string;
   maxLength?: number;
   maxAttachments?: number;
 };
@@ -25,10 +25,11 @@ export function ChatComposer({
   onChange,
   onSubmit,
   onAttach,
-  onRemoveAttachment,
   attachments,
   disabled,
+  attachDisabled,
   loading,
+  placeholder = 'Message your documents',
   maxLength = 4000,
   maxAttachments = 3,
 }: ChatComposerProps) {
@@ -37,7 +38,7 @@ export function ChatComposer({
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   const countedAttachments = attachments.filter(
-    (attachment) => !(attachment.isTemp && attachment.status === 'failed'),
+    (attachment) => attachment.status !== 'failed',
   ).length;
 
   useEffect(() => {
@@ -62,26 +63,12 @@ export function ChatComposer({
         onSubmit();
       }}
     >
-      {attachments.length > 0 ? (
-        <div className="mb-2 flex flex-wrap gap-1.5">
-          {attachments.map((attachment) => (
-            <AttachmentChip
-              key={attachment.id}
-              attachment={attachment}
-              onRemove={(documentId) => {
-                void onRemoveAttachment(documentId);
-              }}
-            />
-          ))}
-        </div>
-      ) : null}
-
       <div className="flex items-end gap-2">
         <Button
           type="button"
           variant="ghost"
           size="icon"
-          disabled={disabled || countedAttachments >= maxAttachments}
+          disabled={attachDisabled || countedAttachments >= maxAttachments}
           onClick={() => fileInputRef.current?.click()}
           className="h-9 w-9 shrink-0 rounded-md border border-[color:var(--line)] text-[var(--muted)] hover:bg-[var(--panel-muted)] hover:text-[var(--foreground)]"
         >
@@ -105,7 +92,7 @@ export function ChatComposer({
             event.target.style.height = 'auto';
             event.target.style.height = `${event.target.scrollHeight}px`;
           }}
-          placeholder="Message your documents"
+          placeholder={placeholder}
           className={cn(
             'max-h-44 min-h-[40px] flex-1 resize-none bg-transparent py-1 text-sm leading-6 text-[var(--foreground)] outline-none placeholder:text-[var(--muted)]',
             disabled && 'cursor-not-allowed opacity-60',

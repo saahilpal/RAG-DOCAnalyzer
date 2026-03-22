@@ -113,7 +113,21 @@ describe('useChatWorkspace', () => {
       ],
     });
     apiMocks.listMessages.mockResolvedValue({ messages: [] });
-    apiMocks.listChatDocuments.mockResolvedValue({ documents: [] });
+    apiMocks.listChatDocuments.mockResolvedValue({
+      documents: [
+        {
+          id: 'doc-1',
+          file_name: 'notes.pdf',
+          file_url: 'https://example.com/notes.pdf',
+          status: 'indexed',
+          page_count: 2,
+          chunk_count: 8,
+          last_error: null,
+          created_at: new Date().toISOString(),
+          indexed_at: new Date().toISOString(),
+        },
+      ],
+    });
     apiMocks.streamChatMessage.mockImplementation(
       async (_chatId: string, _payload: { content: string; clientMessageId: string }, onEvent: (event: unknown) => Promise<void>) => {
         await onEvent({
@@ -155,6 +169,52 @@ describe('useChatWorkspace', () => {
     expect(result.current.serverMessages[1]?.role).toBe('assistant');
     expect(result.current.serverMessages[1]?.content).toBe('Hello world');
     expect(result.current.chatQuota?.used).toBe(1);
+  });
+
+  it('blocks sending while the document is still processing', async () => {
+    apiMocks.listChats.mockResolvedValue({
+      chats: [
+        {
+          id: 'chat-1',
+          title: 'New Chat',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          last_message: null,
+          last_message_at: null,
+          pinned: false,
+          attachment_count: 1,
+        },
+      ],
+    });
+    apiMocks.listMessages.mockResolvedValue({ messages: [] });
+    apiMocks.listChatDocuments.mockResolvedValue({
+      documents: [
+        {
+          id: 'doc-1',
+          file_name: 'notes.pdf',
+          file_url: 'https://example.com/notes.pdf',
+          status: 'processing',
+          page_count: 0,
+          chunk_count: 0,
+          last_error: null,
+          created_at: new Date().toISOString(),
+          indexed_at: null,
+        },
+      ],
+    });
+
+    const { result } = renderHook(() => useChatWorkspace(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.activeChatId).toBe('chat-1');
+    });
+
+    await act(async () => {
+      await result.current.sendMessage('Hello');
+    });
+
+    expect(apiMocks.streamChatMessage).not.toHaveBeenCalled();
+    expect(result.current.composerError).toBe('Processing your document... this will take a few seconds.');
   });
 
   it('ignores stale thread loads when the user switches chats quickly', async () => {

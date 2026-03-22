@@ -1,19 +1,18 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { FileText, RotateCcw } from 'lucide-react';
+import { Lock, RotateCcw } from 'lucide-react';
 import { ChatBubble } from '@/components/chat/chat-bubble';
 import { ChatComposer } from '@/components/chat/chat-composer';
+import { DocumentBubble } from '@/components/chat/document-bubble';
 import { TypingIndicator } from '@/components/chat/typing-indicator';
 import { Modal } from '@/components/ui/modal';
 import { useChatWorkspace } from '@/hooks/use-chat-workspace';
 import { PageTransition } from '@/components/common/page-transition';
 
-const SUGGESTED_PROMPTS = [
-  'Summarize the main argument in my document',
-  'Compare the attached files and highlight differences',
-  'Find the exact section that answers this question',
-];
+const PROCESSING_MESSAGE = 'Processing your document... this will take a few seconds.';
+const READY_MESSAGE = 'Your document is ready. Ask specific questions about it.';
+const FAILED_MESSAGE = "I couldn't process that document. Remove it and upload another file.";
 
 export default function DashboardChatPage() {
   const {
@@ -45,6 +44,11 @@ export default function DashboardChatPage() {
     [attachments],
   );
 
+  const activeAttachments = useMemo(
+    () => attachments.filter((attachment) => attachment.status !== 'failed'),
+    [attachments],
+  );
+
   const pendingAttachments = useMemo(
     () =>
       attachments.filter(
@@ -52,6 +56,8 @@ export default function DashboardChatPage() {
       ).length,
     [attachments],
   );
+  const hasReadyDocument = activeAttachments.length === 1 && readyAttachments === 1 && pendingAttachments === 0;
+  const hasMultipleActiveDocuments = activeAttachments.length > 1;
   const streamingLength = streamingMessage?.content.length || 0;
 
   useEffect(() => {
@@ -91,7 +97,7 @@ export default function DashboardChatPage() {
     };
   }, [serverMessages.length, streamingLength, stickToBottom]);
 
-  const hasMessages = serverMessages.length > 0 || Boolean(streamingMessage);
+  const hasMessages = attachments.length > 0 || serverMessages.length > 0 || Boolean(streamingMessage);
   const quotaReached = Boolean(chatQuota && chatQuota.remaining <= 0);
   const isRetrying = sendPhase === 'retrying';
   const statusLabel =
@@ -100,6 +106,24 @@ export default function DashboardChatPage() {
       : isRetrying
         ? `Retrying connection${retryCount > 0 ? ` (attempt ${retryCount + 1})` : ''}`
         : null;
+  const composerLockedMessage = quotaReached
+    ? ''
+    : hasMultipleActiveDocuments
+      ? 'Keep one document attached to this chat to continue.'
+      : pendingAttachments > 0
+        ? 'Processing document...'
+        : hasReadyDocument
+          ? ''
+          : 'Upload a document to begin.';
+  const composerPlaceholder = hasReadyDocument
+    ? 'Ask something about your document...'
+    : pendingAttachments > 0
+      ? 'Processing document...'
+      : hasMultipleActiveDocuments
+        ? 'Keep one document in this chat'
+        : 'Upload a document to begin';
+  const composerDisabled = quotaReached || !hasReadyDocument;
+  const attachDisabled = quotaReached || activeAttachments.length >= 1;
 
   return (
     <PageTransition>
@@ -116,6 +140,46 @@ export default function DashboardChatPage() {
             </div>
           ) : hasMessages ? (
             <div className="mx-auto flex w-full max-w-[760px] flex-col">
+              {attachments.map((attachment) => (
+                <div key={attachment.id}>
+                  <DocumentBubble
+                    attachment={attachment}
+                    onRemove={(documentId) => {
+                      void removeAttachment(documentId);
+                    }}
+                  />
+
+                  {(attachment.status === 'uploading' || attachment.status === 'processing') && (
+                    <div>
+                      <ChatBubble
+                        role="assistant"
+                        content={PROCESSING_MESSAGE}
+                        timestamp={attachment.attached_at || attachment.created_at}
+                      />
+                      <div className="py-2">
+                        <TypingIndicator label="Processing document" />
+                      </div>
+                    </div>
+                  )}
+
+                  {attachment.status === 'indexed' ? (
+                    <ChatBubble
+                      role="assistant"
+                      content={READY_MESSAGE}
+                      timestamp={attachment.indexed_at || attachment.attached_at || attachment.created_at}
+                    />
+                  ) : null}
+
+                  {attachment.status === 'failed' ? (
+                    <ChatBubble
+                      role="assistant"
+                      content={FAILED_MESSAGE}
+                      timestamp={attachment.attached_at || attachment.created_at}
+                    />
+                  ) : null}
+                </div>
+              ))}
+
               {serverMessages.map((message) => (
                 <ChatBubble
                   key={message.id}
@@ -138,37 +202,24 @@ export default function DashboardChatPage() {
           ) : (
             <div className="mx-auto flex h-full w-full max-w-[760px] flex-col items-center justify-center px-3 text-center">
               <h1 className="font-display text-3xl font-semibold tracking-tight text-[var(--foreground)] md:text-4xl">
-                Ask your documents anything.
+                Upload a document to begin.
               </h1>
               <p className="mt-2 max-w-xl text-sm leading-6 text-[var(--muted)]">
-                Keep one focused thread with grounded responses and fast streaming output.
+                Once it is ready, ask focused questions about a topic, section, or concept.
               </p>
 
               <div className="mt-6 flex flex-wrap items-center justify-center gap-2 text-xs">
                 <div className="rounded-md border border-[color:var(--line)] bg-[var(--panel-strong)] px-3 py-1.5 text-[var(--muted)]">
-                  {readyAttachments} ready
+                  One document per chat
                 </div>
                 <div className="rounded-md border border-[color:var(--line)] bg-[var(--panel-strong)] px-3 py-1.5 text-[var(--muted)]">
-                  {pendingAttachments} processing
+                  Ask specific follow-up questions
                 </div>
                 {chatQuota ? (
                   <div className="rounded-md border border-[color:var(--line)] bg-[var(--panel-strong)] px-3 py-1.5 text-[var(--muted)]">
                     {chatQuota.remaining} remaining
                   </div>
                 ) : null}
-              </div>
-
-              <div className="mt-8 flex w-full flex-col gap-2">
-                {SUGGESTED_PROMPTS.map((prompt) => (
-                  <button
-                    key={prompt}
-                    type="button"
-                    onClick={() => setQuery(prompt)}
-                    className="mx-auto w-full max-w-[620px] rounded-md border border-[color:var(--line)] bg-[var(--panel-strong)] px-4 py-3 text-left text-sm text-[var(--foreground)] transition-colors duration-150 hover:bg-[var(--panel-muted)]"
-                  >
-                    {prompt}
-                  </button>
-                ))}
               </div>
             </div>
           )}
@@ -210,10 +261,10 @@ export default function DashboardChatPage() {
               </div>
             ) : null}
 
-            {pendingAttachments > 0 && readyAttachments === 0 ? (
+            {composerLockedMessage ? (
               <div className="mb-2 inline-flex items-center gap-2 rounded-md border border-[color:var(--line)] bg-[var(--panel-strong)] px-3 py-1.5 text-[11px] uppercase tracking-[0.12em] text-[var(--muted)]">
-                <FileText size={12} />
-                Processing attachments
+                <Lock size={12} />
+                {composerLockedMessage}
               </div>
             ) : null}
 
@@ -235,10 +286,12 @@ export default function DashboardChatPage() {
                 await sendMessage(trimmed);
               }}
               onAttach={attachFile}
-              onRemoveAttachment={removeAttachment}
               attachments={attachments}
-              disabled={quotaReached}
+              disabled={composerDisabled}
+              attachDisabled={attachDisabled}
               loading={sending && sendPhase !== 'retrying'}
+              placeholder={composerPlaceholder}
+              maxAttachments={1}
             />
           </div>
         </div>

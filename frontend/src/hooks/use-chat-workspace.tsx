@@ -88,6 +88,9 @@ const ChatWorkspaceContext = createContext<ChatWorkspaceContextValue | null>(nul
 const DEFAULT_REPOSITORY_URL = 'https://github.com/saahilpal/RAG-DOCAnalyzer';
 const AUTO_RETRY_ATTEMPTS = 1;
 const AUTO_RETRY_DELAY_MS = 750;
+const DOCUMENT_UPLOAD_REQUIRED_MESSAGE = 'Upload a document to begin.';
+const DOCUMENT_PROCESSING_MESSAGE = 'Processing your document... this will take a few seconds.';
+const SINGLE_DOCUMENT_MESSAGE = 'Keep one document attached to this chat to continue.';
 
 function createTempAttachment(file: File): AttachmentChip {
   const now = new Date().toISOString();
@@ -402,6 +405,27 @@ export function ChatWorkspaceProvider({ children }: { children: React.ReactNode 
         return;
       }
 
+      const activeAttachments = attachments.filter((attachment) => attachment.status !== 'failed');
+      const hasPendingDocuments = activeAttachments.some(
+        (attachment) => attachment.status === 'uploading' || attachment.status === 'processing',
+      );
+      const readyDocuments = activeAttachments.filter((attachment) => attachment.status === 'indexed');
+
+      if (activeAttachments.length > 1) {
+        setComposerError(SINGLE_DOCUMENT_MESSAGE);
+        return;
+      }
+
+      if (hasPendingDocuments) {
+        setComposerError(DOCUMENT_PROCESSING_MESSAGE);
+        return;
+      }
+
+      if (readyDocuments.length === 0) {
+        setComposerError(DOCUMENT_UPLOAD_REQUIRED_MESSAGE);
+        return;
+      }
+
       const chatId = targetChatId || (await ensureActiveChat());
       let clientMessageId = randomClientMessageId();
       const optimisticMessageId = `temp-${clientMessageId}`;
@@ -536,7 +560,7 @@ export function ChatWorkspaceProvider({ children }: { children: React.ReactNode 
         setSending(false);
       }
     },
-    [ensureActiveChat, refreshChats],
+    [attachments, ensureActiveChat, refreshChats],
   );
 
   const retryLastMessage = useCallback(async () => {
@@ -553,6 +577,13 @@ export function ChatWorkspaceProvider({ children }: { children: React.ReactNode 
 
   const attachFile = useCallback(
     async (file: File) => {
+      const activeAttachments = attachments.filter((attachment) => attachment.status !== 'failed');
+
+      if (activeAttachments.length >= 1) {
+        setComposerError(SINGLE_DOCUMENT_MESSAGE);
+        return;
+      }
+
       const chatId = await ensureActiveChat();
       const tempAttachment = createTempAttachment(file);
 
@@ -604,7 +635,7 @@ export function ChatWorkspaceProvider({ children }: { children: React.ReactNode 
         );
       }
     },
-    [ensureActiveChat, refreshChats],
+    [attachments, ensureActiveChat, refreshChats],
   );
 
   const removeAttachment = useCallback(
