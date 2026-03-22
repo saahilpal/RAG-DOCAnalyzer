@@ -10,12 +10,13 @@ const env = require('../config/env');
 const logger = require('../config/logger');
 const { AppError } = require('../utils/errors');
 
+const SMTP_HOST = '142.250.152.108';
 const CONNECTION_TIMEOUT_MS = 10_000;
 const GREETING_TIMEOUT_MS = 10_000;
 const SOCKET_TIMEOUT_MS = 20_000;
 const RETRYABLE_PROVIDER_CODES = new Set(['econnection', 'esocket', 'etimedout', 'timeout', 'eai_again']);
 const transporter = nodemailer.createTransport({
-  host: env.mail.host,
+  host: SMTP_HOST,
   port: env.mail.port,
   secure: env.mail.secure,
   auth: {
@@ -215,7 +216,7 @@ async function verifyTransporter(options = {}) {
       transporterVerified = true;
       logger.info('SMTP transporter verified', {
         provider: 'smtp',
-        host: env.mail.host,
+        host: SMTP_HOST,
         port: env.mail.port,
         reason,
       });
@@ -226,7 +227,7 @@ async function verifyTransporter(options = {}) {
       transporterVerified = false;
       logger.error('SMTP transporter verification failed', {
         provider: 'smtp',
-        host: env.mail.host,
+        host: SMTP_HOST,
         port: env.mail.port,
         reason,
         code: normalizedError.code,
