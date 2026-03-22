@@ -6,6 +6,7 @@ import { ExternalLink, LogOut, Menu, Settings2 } from 'lucide-react';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Sidebar } from '@/components/layout/sidebar';
+import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { transitions } from '@/lib/motion';
 import { useAuth } from '@/hooks/use-auth';
@@ -32,7 +33,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <AnimatePresence>
         {sidebarOpen ? (
           <motion.div
-            className="fixed inset-0 z-50 bg-black/30 lg:hidden"
+            className="fixed inset-0 z-50 bg-black/30 backdrop-blur-[2px] lg:hidden"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -60,27 +61,30 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </AnimatePresence>
 
       <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
-        <header className="z-20 flex h-14 items-center justify-between border-b border-[color:var(--line)] bg-[var(--panel)] px-3 md:px-5">
+        <header className="z-20 flex h-16 items-center justify-between border-b border-[color:var(--line)] bg-[rgba(247,244,238,0.92)] px-3 backdrop-blur-xl sm:px-5">
           <div className="flex min-w-0 items-center gap-3">
             <Button variant="secondary" size="icon" className="lg:hidden" onClick={() => setSidebarOpen(true)}>
               <Menu size={16} />
             </Button>
 
             <div className="min-w-0">
-              <p className="text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">Workspace</p>
-              <p className="truncate text-sm font-medium text-[var(--foreground)] md:text-sm">
-                {activeChat?.title || 'New chat'}
-              </p>
+              <p className="text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">Document chat</p>
+              <div className="flex items-center gap-2">
+                <p className="truncate text-sm font-medium text-[var(--foreground)]">{activeChat?.title || 'New chat'}</p>
+                <span className="hidden rounded-full border border-[color:var(--line)] bg-[var(--panel-strong)] px-2 py-0.5 text-[11px] text-[var(--muted)] md:inline-flex">
+                  {readyStatus.ai ? 'AI ready' : 'AI limited'}
+                </span>
+              </div>
             </div>
           </div>
 
           <div className="flex items-center gap-2 md:gap-3">
-            <div className="inline-flex items-center gap-2 rounded-md border border-[color:var(--line)] bg-[var(--panel-strong)] px-2 py-1 text-[11px] text-[var(--muted)] sm:hidden">
+            <div className="inline-flex items-center gap-2 rounded-full border border-[color:var(--line)] bg-[var(--panel-strong)] px-3 py-1 text-[11px] text-[var(--muted)] shadow-[var(--shadow-panel)] sm:hidden">
               <span className={`h-2 w-2 rounded-full ${readyStatus.ai ? 'bg-neutral-900' : 'bg-neutral-400'}`} />
               <span>{remainingQuota != null ? `${remainingQuota} left` : 'Loading'}</span>
             </div>
 
-            <div className="hidden items-center gap-2 rounded-md border border-[color:var(--line)] bg-[var(--panel-strong)] px-2.5 py-1.5 text-xs text-[var(--muted)] sm:inline-flex">
+            <div className="hidden items-center gap-2 rounded-full border border-[color:var(--line)] bg-[var(--panel-strong)] px-3 py-1.5 text-xs text-[var(--muted)] shadow-[var(--shadow-panel)] sm:inline-flex">
               <span className={`h-2 w-2 rounded-full ${readyStatus.ai ? 'bg-neutral-900' : 'bg-neutral-400'}`} />
               <span>{quotaLabel}</span>
             </div>
@@ -104,15 +108,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <AnimatePresence>
         {settingsOpen ? (
           <motion.div
-            className="fixed inset-0 z-50 bg-black/25"
+            className="fixed inset-0 z-50 bg-black/25 backdrop-blur-[2px]"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={transitions.overlay}
             onClick={() => setSettingsOpen(false)}
           >
-          <motion.aside
-              className="absolute right-0 top-0 h-full w-full max-w-md border-l border-[color:var(--line)] bg-[var(--panel)] p-5"
+            <motion.aside
+              className="absolute right-0 top-0 h-full w-full max-w-[420px] overflow-y-auto border-l border-[color:var(--line)] bg-[rgba(247,244,238,0.96)] p-4 shadow-[var(--shadow-soft)] sm:p-6"
               initial={{ x: 40, opacity: 0 }}
               animate={{ x: 0, opacity: 1 }}
               exit={{ x: 24, opacity: 0 }}
@@ -123,25 +127,25 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <p className="text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">Settings</p>
-                    <h2 className="text-xl font-semibold text-[var(--foreground)]">Your account</h2>
+                    <h2 className="text-xl font-semibold text-[var(--foreground)]">Workspace controls</h2>
                   </div>
                   <Button variant="ghost" size="icon" onClick={() => setSettingsOpen(false)}>
                     <span className="text-lg leading-none">×</span>
                   </Button>
                 </div>
 
-                <div className="mt-6 space-y-3">
-                  <div className="rounded-md border border-[color:var(--line)] bg-[var(--panel-strong)] p-4">
+                <div className="mt-6 space-y-4">
+                  <Card className="bg-white/86 p-4">
                     <p className="text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">Email</p>
                     <p className="mt-2 text-sm font-medium text-[var(--foreground)]">{user?.email}</p>
-                  </div>
+                  </Card>
 
-                  <div className="rounded-md border border-[color:var(--line)] bg-[var(--panel-strong)] p-4">
+                  <Card className="bg-white/86 p-4">
                     <p className="text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">Model</p>
                     <p className="mt-2 text-sm font-medium text-[var(--foreground)]">{modelName || 'Loading model...'}</p>
-                  </div>
+                  </Card>
 
-                  <div className="rounded-md border border-[color:var(--line)] bg-[var(--panel-strong)] p-4">
+                  <Card className="bg-white/86 p-4">
                     <div className="flex items-center justify-between gap-4">
                       <div>
                         <p className="text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">Remaining usage</p>
@@ -149,18 +153,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                           {remainingQuota ?? '--'}
                         </p>
                       </div>
-                      <div className="rounded-md border border-[color:var(--line)] px-2.5 py-1 text-xs font-medium text-[var(--muted)]">
+                      <div className="rounded-full border border-[color:var(--line)] px-2.5 py-1 text-xs font-medium text-[var(--muted)]">
                         {quotaLimit ? `${chatQuota?.used || 0}/${quotaLimit}` : '...'}
                       </div>
                     </div>
-                  </div>
+                  </Card>
 
-                  <div className="rounded-md border border-[color:var(--line)] bg-[var(--panel-strong)] p-4">
+                  <Card className="bg-white/86 p-4">
                     <p className="text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">Actions</p>
-                    <div className="mt-2 space-y-2">
+                    <div className="mt-3 space-y-2">
                       <Link
                         href={`/forgot-password?email=${encodeURIComponent(user?.email || '')}`}
-                        className="inline-flex w-full items-center justify-between rounded-md border border-[color:var(--line)] px-3 py-2 text-sm font-medium text-[var(--foreground)] transition-colors duration-150 hover:bg-[var(--panel-muted)]"
+                        className="inline-flex w-full items-center justify-between rounded-xl border border-[color:var(--line)] px-3 py-3 text-sm font-medium text-[var(--foreground)] transition-colors duration-200 hover:bg-[var(--panel-muted)]"
                       >
                         Reset password
                         <Settings2 size={14} />
@@ -168,15 +172,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                       <Link
                         href={runLocallyGuideUrl}
                         target="_blank"
-                        className="inline-flex w-full items-center justify-between rounded-md border border-[color:var(--line)] px-3 py-2 text-sm font-medium text-[var(--foreground)] transition-colors duration-150 hover:bg-[var(--panel-muted)]"
+                        className="inline-flex w-full items-center justify-between rounded-xl border border-[color:var(--line)] px-3 py-3 text-sm font-medium text-[var(--foreground)] transition-colors duration-200 hover:bg-[var(--panel-muted)]"
                       >
                         View project quick start
                         <ExternalLink size={14} />
                       </Link>
                     </div>
-                  </div>
+                  </Card>
 
-                  <div className="rounded-md border border-[color:var(--line)] bg-[var(--panel-strong)] p-4">
+                  <Card className="bg-white/86 p-4">
                     <p className="text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">About me</p>
                     <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
                       Built by Sahil Pal. Backend-first engineer focused on resilient systems and polished user
@@ -186,19 +190,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                       <Link
                         href="https://github.com/saahilpal"
                         target="_blank"
-                        className="inline-flex rounded-md border border-[color:var(--line)] px-2.5 py-1 text-xs font-medium text-[var(--foreground)]"
+                        className="inline-flex rounded-full border border-[color:var(--line)] px-3 py-1 text-xs font-medium text-[var(--foreground)] transition-colors duration-200 hover:bg-[var(--panel-muted)]"
                       >
                         GitHub
                       </Link>
                       <Link
                         href="https://www.linkedin.com/in/sahiilpal"
                         target="_blank"
-                        className="inline-flex rounded-md border border-[color:var(--line)] px-2.5 py-1 text-xs font-medium text-[var(--foreground)]"
+                        className="inline-flex rounded-full border border-[color:var(--line)] px-3 py-1 text-xs font-medium text-[var(--foreground)] transition-colors duration-200 hover:bg-[var(--panel-muted)]"
                       >
                         LinkedIn
                       </Link>
                     </div>
-                  </div>
+                  </Card>
                 </div>
 
                 <div className="mt-auto pt-6">

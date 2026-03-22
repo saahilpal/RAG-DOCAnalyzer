@@ -14,8 +14,10 @@ const spaceGrotesk = Space_Grotesk({
 });
 
 export const metadata: Metadata = {
-  title: 'Document Analyzer',
-  description: 'Chat with your documents in a polished, chat-first AI workspace.',
+  title: 'Document Analyzer | Chat with your documents using AI',
+  description:
+    'Upload a document, let AI process it, and ask focused questions in a polished chat-first workspace.',
+  applicationName: 'Document Analyzer',
 };
 
 export default function RootLayout({

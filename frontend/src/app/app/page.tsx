@@ -115,30 +115,30 @@ export default function DashboardChatPage() {
           ? ''
           : 'Please upload a document to begin.';
   const composerPlaceholder = hasReadyDocument
-      ? 'Ask something about your document...'
-      : pendingAttachments > 0
-        ? 'Processing document...'
-        : hasMultipleActiveDocuments
-          ? 'Keep one document in this chat'
+    ? 'Ask something about your document...'
+    : pendingAttachments > 0
+      ? 'Processing document...'
+      : hasMultipleActiveDocuments
+        ? 'Keep one document in this chat'
         : 'Upload a document to begin';
   const composerDisabled = quotaReached || !hasReadyDocument;
   const attachDisabled = quotaReached || activeAttachments.length >= 1;
 
   return (
     <PageTransition>
-      <div className="relative flex h-full min-h-0 flex-col">
-        <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto px-4 pb-36 pt-4 sm:px-5 lg:px-8">
+      <div className="relative flex h-full min-h-0 flex-col bg-[linear-gradient(180deg,rgba(255,255,255,0.18),transparent_24%)]">
+        <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto px-4 pb-40 pt-5 sm:px-6 lg:px-8">
           {loadingThread ? (
             <div className="mx-auto w-full max-w-[760px] space-y-3 pt-6">
               {[0, 1, 2].map((index) => (
                 <div
                   key={index}
-                  className="h-14 w-full animate-pulse rounded-md border border-[color:var(--line)] bg-[var(--panel-muted)]"
+                  className="h-16 w-full animate-pulse rounded-2xl border border-[color:var(--line)] bg-[var(--panel-muted)]"
                 />
               ))}
             </div>
           ) : hasMessages ? (
-            <div className="mx-auto flex w-full max-w-[760px] flex-col">
+            <div className="mx-auto flex w-full max-w-[760px] flex-col gap-1.5">
               {attachments.map((attachment) => (
                 <div key={attachment.id}>
                   <DocumentBubble
@@ -199,42 +199,63 @@ export default function DashboardChatPage() {
               ) : null}
             </div>
           ) : (
-            <div className="mx-auto flex h-full w-full max-w-[760px] flex-col items-center justify-center px-3 text-center">
-              <h1 className="font-display text-3xl font-semibold tracking-tight text-[var(--foreground)] md:text-4xl">
-                Upload a document to begin.
-              </h1>
-              <p className="mt-2 max-w-xl text-sm leading-6 text-[var(--muted)]">
-                Once it is ready, ask focused questions about a topic, section, or concept.
-              </p>
+            <div className="mx-auto flex h-full w-full max-w-[760px] flex-col items-center justify-center px-3 py-10 text-center">
+              <div className="w-full rounded-[28px] border border-[color:var(--line)] bg-[rgba(255,255,255,0.8)] px-6 py-8 shadow-[var(--shadow-soft)] sm:px-8 sm:py-10">
+                <div className="mx-auto inline-flex items-center gap-2 rounded-full border border-[color:var(--line)] bg-white/80 px-3 py-1.5 text-[11px] uppercase tracking-[0.14em] text-[var(--muted)]">
+                  Document chat
+                </div>
+                <h1 className="font-display mt-5 text-3xl font-semibold tracking-tight text-[var(--foreground)] md:text-4xl">
+                  Upload a document to begin.
+                </h1>
+                <p className="mx-auto mt-3 max-w-xl text-sm leading-7 text-[var(--muted)] sm:text-base">
+                  The workspace is designed for one clear flow: upload a PDF, wait for processing, then ask focused
+                  questions about the document.
+                </p>
 
-              <div className="mt-6 flex flex-wrap items-center justify-center gap-2 text-xs">
-                <div className="rounded-md border border-[color:var(--line)] bg-[var(--panel-strong)] px-3 py-1.5 text-[var(--muted)]">
-                  One document per chat
-                </div>
-                <div className="rounded-md border border-[color:var(--line)] bg-[var(--panel-strong)] px-3 py-1.5 text-[var(--muted)]">
-                  Ask specific follow-up questions
-                </div>
-                {chatQuota ? (
-                  <div className="rounded-md border border-[color:var(--line)] bg-[var(--panel-strong)] px-3 py-1.5 text-[var(--muted)]">
-                    {chatQuota.remaining} remaining
+                <div className="mt-6 grid gap-3 text-left sm:grid-cols-3">
+                  <div className="rounded-2xl border border-[color:var(--line)] bg-[var(--panel-strong)] px-4 py-4">
+                    <p className="text-[11px] uppercase tracking-[0.14em] text-[var(--muted)]">1</p>
+                    <p className="mt-2 text-sm font-medium text-[var(--foreground)]">Upload a PDF</p>
                   </div>
-                ) : null}
+                  <div className="rounded-2xl border border-[color:var(--line)] bg-[var(--panel-strong)] px-4 py-4">
+                    <p className="text-[11px] uppercase tracking-[0.14em] text-[var(--muted)]">2</p>
+                    <p className="mt-2 text-sm font-medium text-[var(--foreground)]">Let AI process it</p>
+                  </div>
+                  <div className="rounded-2xl border border-[color:var(--line)] bg-[var(--panel-strong)] px-4 py-4">
+                    <p className="text-[11px] uppercase tracking-[0.14em] text-[var(--muted)]">3</p>
+                    <p className="mt-2 text-sm font-medium text-[var(--foreground)]">Ask specific questions</p>
+                  </div>
+                </div>
+
+                <div className="mt-6 flex flex-wrap items-center justify-center gap-2 text-xs">
+                  <div className="rounded-full border border-[color:var(--line)] bg-[var(--panel-strong)] px-3 py-1.5 text-[var(--muted)]">
+                    One document per chat
+                  </div>
+                  <div className="rounded-full border border-[color:var(--line)] bg-[var(--panel-strong)] px-3 py-1.5 text-[var(--muted)]">
+                    Grounded follow-up answers
+                  </div>
+                  {chatQuota ? (
+                    <div className="rounded-full border border-[color:var(--line)] bg-[var(--panel-strong)] px-3 py-1.5 text-[var(--muted)]">
+                      {chatQuota.remaining} remaining today
+                    </div>
+                  ) : null}
+                </div>
               </div>
             </div>
           )}
         </div>
 
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 border-t border-[color:var(--line)] bg-[var(--panel)] px-4 py-3 sm:px-5 lg:px-8">
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 border-t border-[color:var(--line)] bg-[rgba(247,244,238,0.92)] px-4 py-3 backdrop-blur-xl sm:px-6 lg:px-8">
           <div className="pointer-events-auto mx-auto w-full max-w-[760px]">
             {statusLabel ? (
-              <div className="mb-2 inline-flex items-center gap-2 rounded-md border border-[color:var(--line)] bg-[var(--panel-strong)] px-3 py-1.5 text-xs text-[var(--muted)]">
+              <div className="mb-2 inline-flex items-center gap-2 rounded-xl border border-[color:var(--line)] bg-[var(--panel-strong)] px-3 py-1.5 text-xs text-[var(--muted)] shadow-[var(--shadow-panel)]">
                 <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--foreground)]" />
                 {statusLabel}
               </div>
             ) : null}
 
             {composerError ? (
-              <div className="mb-2 flex items-center justify-between gap-3 rounded-md border border-[rgba(38,38,38,0.25)] bg-[rgba(38,38,38,0.06)] px-3 py-2 text-xs text-[var(--foreground)]">
+              <div className="mb-2 flex flex-col gap-3 rounded-2xl border border-[rgba(38,38,38,0.18)] bg-[rgba(255,255,255,0.72)] px-4 py-3 text-xs text-[var(--foreground)] shadow-[var(--shadow-panel)] sm:flex-row sm:items-center sm:justify-between">
                 <span>{composerError}</span>
                 <div className="flex items-center gap-2">
                   {canRetryLastMessage ? (
@@ -243,7 +264,7 @@ export default function DashboardChatPage() {
                       onClick={() => {
                         void retryLastMessage();
                       }}
-                      className="inline-flex items-center gap-1 rounded-md border border-[color:var(--line)] bg-[var(--panel-strong)] px-2 py-1 font-medium text-[var(--foreground)] transition-colors duration-150 hover:bg-[var(--panel-muted)]"
+                      className="inline-flex items-center gap-1 rounded-xl border border-[color:var(--line)] bg-[var(--panel-strong)] px-2.5 py-1.5 font-medium text-[var(--foreground)] transition-colors duration-200 hover:bg-[var(--panel-muted)]"
                     >
                       <RotateCcw size={12} />
                       Retry
@@ -252,7 +273,7 @@ export default function DashboardChatPage() {
                   <button
                     type="button"
                     onClick={clearComposerError}
-                    className="rounded-md px-2 py-1 text-[var(--muted)] transition-colors duration-150 hover:bg-[var(--panel-muted)] hover:text-[var(--foreground)]"
+                    className="rounded-xl px-2.5 py-1.5 text-[var(--muted)] transition-colors duration-200 hover:bg-[var(--panel-muted)] hover:text-[var(--foreground)]"
                   >
                     Dismiss
                   </button>
@@ -261,7 +282,7 @@ export default function DashboardChatPage() {
             ) : null}
 
             {composerLockedMessage ? (
-              <div className="mb-2 inline-flex items-center gap-2 rounded-md border border-[color:var(--line)] bg-[var(--panel-strong)] px-3 py-1.5 text-[11px] uppercase tracking-[0.12em] text-[var(--muted)]">
+              <div className="mb-2 inline-flex flex-wrap items-center gap-2 rounded-xl border border-[color:var(--line)] bg-[var(--panel-strong)] px-3 py-1.5 text-[11px] uppercase tracking-[0.12em] text-[var(--muted)] shadow-[var(--shadow-panel)]">
                 <Lock size={12} />
                 {composerLockedMessage}
               </div>
@@ -302,7 +323,7 @@ export default function DashboardChatPage() {
           cancelLabel="Close"
           onClose={() => setQuotaModalOpen(false)}
         >
-          <div className="rounded-md border border-[color:var(--line)] bg-[var(--panel-strong)] px-4 py-3 text-sm leading-6 text-[var(--muted)]">
+          <div className="rounded-2xl border border-[color:var(--line)] bg-[var(--panel-strong)] px-4 py-3 text-sm leading-6 text-[var(--muted)]">
             You have used the available messages for today. Please come back tomorrow to continue chatting with your
             document.
           </div>

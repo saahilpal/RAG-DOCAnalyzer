@@ -97,7 +97,7 @@ export function Modal({
     <AnimatePresence>
       {open ? (
         <motion.div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 px-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 px-4 backdrop-blur-[2px]"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -111,7 +111,7 @@ export function Modal({
             aria-describedby={description ? descriptionId : undefined}
             tabIndex={-1}
             ref={dialogRef}
-            className="w-full max-w-md rounded-md border border-[color:var(--line)] bg-[var(--panel-strong)] p-5"
+            className="w-full max-w-md rounded-2xl border border-[color:var(--line)] bg-[var(--panel-strong)] p-6 shadow-[var(--shadow-soft)]"
             initial={{ y: 16, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 8, opacity: 0 }}
@@ -133,7 +133,7 @@ export function Modal({
               <button
                 type="button"
                 onClick={onClose}
-                className="rounded-md p-1.5 text-[var(--muted)] transition-colors duration-150 hover:bg-[var(--panel-muted)]"
+                className="rounded-xl p-1.5 text-[var(--muted)] transition-colors duration-200 hover:bg-[var(--panel-muted)]"
                 aria-label="Close modal"
               >
                 <X size={16} />
@@ -142,11 +142,15 @@ export function Modal({
 
             {children}
 
-            <div className="mt-6 flex justify-end gap-2">
-              <Button variant="secondary" onClick={onClose}>
+            <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <Button variant="secondary" onClick={onClose} className="w-full sm:w-auto">
                 {cancelLabel}
               </Button>
-              {onConfirm ? <Button variant={confirmVariant} onClick={onConfirm}>{confirmLabel}</Button> : null}
+              {onConfirm ? (
+                <Button variant={confirmVariant} onClick={onConfirm} className="w-full sm:w-auto">
+                  {confirmLabel}
+                </Button>
+              ) : null}
             </div>
           </motion.div>
         </motion.div>

@@ -1,23 +1,63 @@
 # Document Analyzer RAG
 
-Chat with your documents in a clean, chat-first AI workspace.
+Chat with your documents using AI.
 
-## Overview
+Document Analyzer RAG is a chat-first document analysis product built around one clear flow:
 
-Document Analyzer RAG is built for focused document Q&A rather than generic chatbot behavior. Users upload a PDF, see it move through upload and processing states inside the chat timeline, then ask specific follow-up questions once the document is ready.
+1. Upload a PDF
+2. Let the system process it
+3. Ask focused questions about the document
 
-The stack combines a Next.js frontend, an Express backend, Supabase storage, PostgreSQL retrieval, Gemini generation, and SMTP-based email delivery.
+The product is intentionally strict about staying grounded in uploaded document context. It avoids pretending to understand an entire file when retrieval is weak, and it guides users toward specific follow-up questions instead.
 
-## Product Highlights
+## What The Product Does
 
-- Chat-only document workflow with upload, processing, and ready states in the thread
-- Strict document-grounded responses with guidance for vague or overly broad prompts
+- Uploads PDF documents into a chat workspace
+- Processes them asynchronously into searchable chunks
+- Retrieves relevant context for each user question
+- Streams grounded answers back into the conversation
+- Handles signup, email verification, login, and password reset with SMTP email delivery
+
+## Why It Exists
+
+Most document chat demos either look like generic chatbots or overloaded file dashboards. This project keeps the experience simpler and more honest:
+
+- The conversation is the primary interface
+- Upload, processing, and ready states are visible in the thread
+- The assistant stays document-grounded
+- Broad prompts are redirected instead of answered misleadingly
+
+## Product Flow
+
+```text
+Sign up / Sign in
+  -> Upload PDF in chat
+  -> Document indexes in the background
+  -> Ask a specific question
+  -> Backend retrieves relevant context
+  -> Gemini streams a grounded answer
+```
+
+## Core Features
+
+- Chat-first document workflow with upload, processing, and ready states
+- Strict document-grounded answers with vague-query and no-match guidance
 - Streaming assistant responses over SSE
-- Email + password auth with email verification and password reset codes
-- Persistent chat controls: rename, pin, delete
-- Daily usage quota and workspace diagnostics
-- Vector retrieval with automatic PostgreSQL FTS fallback
-- Private Supabase Storage references for uploaded files
+- Email + password auth with verification and password reset codes
+- Persistent chat controls: create, rename, pin, and delete
+- Private Supabase Storage for uploaded files
+- Configurable retrieval with vector search and PostgreSQL FTS fallback
+- Daily chat quota and workspace diagnostics
+
+## Tech Stack
+
+- Frontend: Next.js, React, Tailwind CSS, Framer Motion
+- Backend: Node.js, Express
+- Database: PostgreSQL (Supabase)
+- Storage: Supabase Storage
+- AI: Google Gemini
+- Email: Nodemailer over Gmail SMTP
+- Deployment: Vercel for the frontend, Render for the backend
 
 ## Architecture
 
@@ -33,17 +73,11 @@ The stack combines a Next.js frontend, an Express backend, Supabase storage, Pos
   <img src="./docs/rag-architecture.svg" alt="RAG retrieval and generation flow diagram" width="960" />
 </p>
 
-For additional architecture notes, see [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md).
+Supporting docs:
 
-## Tech Stack
-
-- Frontend: Next.js, React, Tailwind CSS, Framer Motion
-- Backend: Node.js, Express
-- Database: PostgreSQL (Supabase)
-- Storage: Supabase Storage
-- AI: Google Gemini
-- Email: Nodemailer over Gmail SMTP
-- Deployment: Vercel (frontend), Render (backend)
+- [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md)
+- [`docs/rag.md`](./docs/rag.md)
+- [`DEPLOYMENT_CHECKLIST.md`](./DEPLOYMENT_CHECKLIST.md)
 
 ## Quick Start
 
@@ -69,7 +103,7 @@ cd frontend
 cp .env.example .env.local
 ```
 
-Required backend variables:
+Minimum backend variables:
 
 - `DATABASE_URL`
 - `SUPABASE_URL`
@@ -81,35 +115,52 @@ Required backend variables:
 - `EMAIL_PASS`
 - `EMAIL_FROM`
 
-Required frontend variable:
+Frontend variable:
 
 - `NEXT_PUBLIC_API_URL`
 
-### 3. Initialize and run
+### 3. Initialize the database
 
 Use `npm run db:schema` only against a fresh or disposable database. The schema file recreates core tables.
 
-From the repo root:
-
 ```bash
 npm run db:schema
+```
+
+### 4. Start the app
+
+Backend:
+
+```bash
 npm run dev
 ```
 
-In a second terminal:
+Frontend:
 
 ```bash
 cd frontend
 npm run dev
 ```
 
-### 4. Local workflow
+### 5. Use the product locally
 
-1. Sign up with email and password.
-2. Verify the emailed OTP code.
-3. Upload a PDF in the chat workspace.
-4. Wait for the assistant to say the document is ready.
+1. Create an account with email and password.
+2. Verify the emailed code.
+3. Open the workspace and upload a PDF.
+4. Wait until the assistant says the document is ready.
 5. Ask focused questions about the uploaded document.
+
+## Scripts
+
+From the repository root:
+
+```bash
+npm run dev
+npm run test
+npm run frontend:lint
+npm run frontend:test
+npm run frontend:build
+```
 
 ## Deployment
 
@@ -128,7 +179,7 @@ Production notes:
 
 ## Verification
 
-From the repo root:
+Automated checks:
 
 ```bash
 npm test
@@ -139,10 +190,11 @@ npm run frontend:build
 
 Recommended manual checks:
 
-1. Create an account, verify email, and log in.
+1. Sign up, verify email, and log in.
 2. Upload a PDF and confirm the chat shows processing, then ready.
 3. Ask a specific document question and confirm the answer streams.
 4. Try a vague prompt such as `what is this` and confirm the app asks for a more specific question.
+5. Try a question with no matching context and confirm the assistant asks for a narrower query instead of inventing an answer.
 
 ## About
 

@@ -50,7 +50,7 @@ export function Dropdown({ items, align = 'right', buttonClassName }: DropdownPr
         type="button"
         onClick={() => setOpen((prev) => !prev)}
         className={cn(
-          'rounded-md border border-transparent p-1.5 text-[var(--muted)] transition-colors duration-150 hover:bg-[var(--panel-muted)] hover:text-[var(--foreground)]',
+          'rounded-xl border border-transparent p-1.5 text-[var(--muted)] transition-colors duration-200 hover:bg-[var(--panel-muted)] hover:text-[var(--foreground)]',
           buttonClassName,
         )}
         aria-label="Open menu"
@@ -66,7 +66,7 @@ export function Dropdown({ items, align = 'right', buttonClassName }: DropdownPr
             exit={{ opacity: 0, y: 2 }}
             transition={transitions.dropdown}
             className={cn(
-              'absolute z-30 mt-2 min-w-44 rounded-md border border-[color:var(--line)] bg-[var(--panel-strong)] py-1',
+              'absolute z-30 mt-2 min-w-44 rounded-xl border border-[color:var(--line)] bg-[var(--panel-strong)] py-1 shadow-[var(--shadow-panel)]',
               align === 'right' ? 'right-0' : 'left-0',
             )}
           >
@@ -81,7 +81,7 @@ export function Dropdown({ items, align = 'right', buttonClassName }: DropdownPr
                   type="button"
                   disabled={item.disabled}
                   className={cn(
-                    'flex w-full items-center px-3 py-2 text-left text-sm transition-colors duration-150',
+                    'flex w-full items-center px-3 py-2 text-left text-sm transition-colors duration-200',
                     item.disabled 
                       ? 'cursor-default opacity-60 text-[var(--muted)] font-medium' 
                       : 'text-[var(--foreground)] hover:bg-[var(--panel-muted)]',

@@ -2,7 +2,7 @@
 
 export function TypingIndicator({ label = 'Thinking' }: { label?: string }) {
   return (
-    <div className="inline-flex items-center gap-2 rounded-md border border-[color:var(--line)] bg-[var(--panel-strong)] px-3 py-1.5 text-xs text-[var(--muted)]">
+    <div className="inline-flex items-center gap-2 rounded-xl border border-[color:var(--line)] bg-[var(--panel-strong)] px-3 py-1.5 text-xs text-[var(--muted)] shadow-[var(--shadow-panel)]">
       <span>{label}</span>
       <span className="flex items-center gap-1">
         {[0, 1, 2].map((index) => (

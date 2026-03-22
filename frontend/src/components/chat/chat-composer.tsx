@@ -53,7 +53,7 @@ export function ChatComposer({
   return (
     <form
       ref={formRef}
-      className="rounded-md border border-[color:var(--line)] bg-[var(--panel-strong)] px-3 py-2"
+      className="rounded-[24px] border border-[color:var(--line)] bg-[rgba(255,255,255,0.86)] px-3 py-3 shadow-[var(--shadow-panel)] transition-[border-color,box-shadow,background-color] duration-200 focus-within:border-[color:var(--line-strong)] focus-within:bg-white"
       onSubmit={(event) => {
         event.preventDefault();
         if (!value.trim() || disabled || loading) {
@@ -63,14 +63,14 @@ export function ChatComposer({
         onSubmit();
       }}
     >
-      <div className="flex items-end gap-2">
+      <div className="flex items-end gap-3">
         <Button
           type="button"
           variant="ghost"
           size="icon"
           disabled={attachDisabled || countedAttachments >= maxAttachments}
           onClick={() => fileInputRef.current?.click()}
-          className="h-9 w-9 shrink-0 rounded-md border border-[color:var(--line)] text-[var(--muted)] hover:bg-[var(--panel-muted)] hover:text-[var(--foreground)]"
+          className="h-10 w-10 shrink-0 rounded-xl border border-[color:var(--line)] bg-[var(--panel)] text-[var(--muted)] hover:bg-[var(--panel-muted)] hover:text-[var(--foreground)]"
         >
           <Paperclip size={16} />
         </Button>
@@ -94,7 +94,7 @@ export function ChatComposer({
           }}
           placeholder={placeholder}
           className={cn(
-            'max-h-44 min-h-[40px] flex-1 resize-none bg-transparent py-1 text-sm leading-6 text-[var(--foreground)] outline-none placeholder:text-[var(--muted)]',
+            'max-h-44 min-h-[44px] flex-1 resize-none bg-transparent py-1.5 text-sm leading-6 text-[var(--foreground)] outline-none placeholder:text-[var(--muted)]',
             disabled && 'cursor-not-allowed opacity-60',
           )}
         />
@@ -103,7 +103,7 @@ export function ChatComposer({
           type="submit"
           size="icon"
           disabled={disabled || loading || !value.trim()}
-          className="h-9 w-9 shrink-0 rounded-md"
+          className="h-10 w-10 shrink-0 rounded-xl"
         >
           {loading ? <Loader2 size={16} className="animate-spin" /> : <SendHorizontal size={16} />}
         </Button>

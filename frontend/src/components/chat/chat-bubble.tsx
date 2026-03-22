@@ -17,7 +17,7 @@ function ChatBubbleComponent({ role, content, timestamp, streaming = false }: Ch
   const isUser = role === 'user';
 
   return (
-    <article className="flex w-full justify-center py-1">
+    <article className="flex w-full justify-center py-1.5">
       <div
         className={cn(
           'flex w-full max-w-[720px] gap-2',
@@ -27,12 +27,12 @@ function ChatBubbleComponent({ role, content, timestamp, streaming = false }: Ch
         <div
           className={cn(
             isUser
-              ? 'max-w-[85%] rounded-md bg-[var(--foreground)] px-3 py-2 text-[var(--background-strong)] sm:max-w-[78%]'
-              : 'min-w-0 max-w-[88%] rounded-md border border-[color:var(--line)] bg-[var(--panel-strong)] px-3 py-2 text-[var(--foreground)]',
+              ? 'max-w-[92%] rounded-[24px] bg-[var(--foreground)] px-4 py-3 text-[var(--background-strong)] shadow-[var(--shadow-panel)] sm:max-w-[80%]'
+              : 'min-w-0 max-w-[94%] rounded-[24px] border border-[color:var(--line)] bg-[rgba(255,255,255,0.88)] px-4 py-3 text-[var(--foreground)] shadow-[var(--shadow-panel)] sm:max-w-[84%]',
           )}
         >
           {!isUser ? (
-            <p className="mb-1 text-[10px] uppercase tracking-[0.14em] text-[var(--muted)]">Assistant</p>
+            <p className="mb-1.5 text-[10px] uppercase tracking-[0.14em] text-[var(--muted)]">Assistant</p>
           ) : null}
 
           <div
@@ -43,7 +43,7 @@ function ChatBubbleComponent({ role, content, timestamp, streaming = false }: Ch
           >
             <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
             {streaming && !isUser ? (
-              <span className="inline-block h-4 w-0.5 animate-pulse bg-[var(--foreground)] align-middle" />
+              <span className="ml-1 inline-block h-4 w-0.5 animate-pulse bg-[var(--foreground)] align-middle" />
             ) : null}
           </div>
 

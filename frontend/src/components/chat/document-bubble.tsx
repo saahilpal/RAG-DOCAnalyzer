@@ -31,13 +31,14 @@ function DocumentBubbleComponent({ attachment, onRemove }: DocumentBubbleProps) 
   const loading = attachment.status === 'uploading' || attachment.status === 'processing';
   const failed = attachment.status === 'failed';
   const timestamp = attachment.attached_at || attachment.created_at;
+  const progress = attachment.progress != null ? Math.max(0, Math.min(100, attachment.progress)) : null;
 
   return (
-    <article className="flex w-full justify-center py-1">
+    <article className="flex w-full justify-center py-1.5">
       <div className="flex w-full max-w-[720px] justify-end">
         <div
           className={cn(
-            'w-full max-w-[85%] rounded-md px-3 py-2 sm:max-w-[78%]',
+            'w-full max-w-[92%] rounded-[24px] px-4 py-3 shadow-[var(--shadow-panel)] sm:max-w-[80%]',
             failed
               ? 'border border-[rgba(153,27,27,0.2)] bg-[rgba(153,27,27,0.08)] text-[#7f1d1d]'
               : 'bg-[var(--foreground)] text-[var(--background-strong)]',
@@ -83,8 +84,17 @@ function DocumentBubbleComponent({ attachment, onRemove }: DocumentBubbleProps) 
             </button>
           </div>
 
+          {loading && progress != null ? (
+            <div className="mt-3 overflow-hidden rounded-full bg-white/12">
+              <div
+                className="h-1.5 rounded-full bg-white/70 transition-[width] duration-200"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+          ) : null}
+
           {timestamp ? (
-            <div className="mt-1 flex justify-end">
+            <div className="mt-2 flex justify-end">
               <p className={cn('text-[11px]', failed ? 'text-[#7f1d1d]/70' : 'text-[var(--background-strong)]/55')}>
                 {formatTime(timestamp)}
               </p>
