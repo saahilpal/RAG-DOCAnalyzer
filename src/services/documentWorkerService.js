@@ -11,6 +11,7 @@ const geminiService = require('./geminiService');
 
 let intervalHandle = null;
 let draining = false;
+const RETRY_PREFIX = 'Retrying automatically';
 
 function splitIntoBatches(items, batchSize) {
   const batches = [];
@@ -85,13 +86,48 @@ async function buildChunkRecords(chunks) {
   return embeddings;
 }
 
+function getRetryAttemptCount(lastError) {
+  const match = String(lastError || '').match(/^Retrying automatically \(attempt (\d+)\/(\d+)\)\./i);
+  return match ? Number(match[1]) || 0 : 0;
+}
+
+function isRetryableProcessingError(error) {
+  if (error instanceof AppError) {
+    if (error.status >= 500) {
+      return true;
+    }
+
+    return error.code === 'AI_TEMPORARILY_UNAVAILABLE' || error.code === 'STORAGE_DOWNLOAD_FAILED';
+  }
+
+  return true;
+}
+
+function getRetryDelayMs(nextAttempt) {
+  return Math.min(
+    env.documentProcessingRetryAfterMs * Math.max(1, nextAttempt),
+    env.documentProcessingRetryAfterMs * env.documentProcessingMaxRetries,
+  );
+}
+
+function formatRetryMessage(nextAttempt, error) {
+  const message = String(error?.message || 'Document processing failed.');
+  return `${RETRY_PREFIX} (attempt ${nextAttempt}/${env.documentProcessingMaxRetries}). Last error: ${message}`;
+}
+
+function formatFinalFailureMessage(attemptCount, error) {
+  const message = String(error?.message || 'Document processing failed.');
+  return `Processing failed after ${attemptCount} attempt${attemptCount === 1 ? '' : 's'}. Last error: ${message}`;
+}
+
 async function claimNextProcessingDocument() {
   return db.withTransaction(async (client) => {
     const result = await client.query(
       `SELECT id,
               user_id,
               file_name,
-              storage_path
+              storage_path,
+              last_error
        FROM documents
        WHERE status = 'processing'
          AND (
@@ -112,13 +148,13 @@ async function claimNextProcessingDocument() {
 
     const claimedResult = await client.query(
       `UPDATE documents
-       SET processing_started_at = NOW(),
-           last_error = NULL
+       SET processing_started_at = NOW()
        WHERE id = $1
        RETURNING id,
                  user_id,
                  file_name,
-                 storage_path`,
+                 storage_path,
+                 last_error`,
       [document.id],
     );
 
@@ -182,6 +218,37 @@ async function markDocumentFailed(documentId, error) {
   });
 }
 
+async function scheduleDocumentRetry(document, error, nextAttempt) {
+  const retryDelayMs = getRetryDelayMs(nextAttempt);
+  const retryEligibleAt = new Date(
+    Date.now() - env.documentProcessingRetryAfterMs + retryDelayMs,
+  );
+
+  await db.withTransaction(async (client) => {
+    await client.query('DELETE FROM chunks WHERE document_id = $1', [document.id]);
+    await client.query(
+      `UPDATE documents
+       SET status = 'processing',
+           page_count = 0,
+           chunk_count = 0,
+           last_error = $2,
+           processing_started_at = $3,
+           indexed_at = NULL
+       WHERE id = $1`,
+      [document.id, formatRetryMessage(nextAttempt, error), retryEligibleAt],
+    );
+  });
+
+  logger.warn('Document indexing scheduled for retry', {
+    documentId: document.id,
+    attempt: nextAttempt,
+    maxRetries: env.documentProcessingMaxRetries,
+    retryDelayMs,
+    code: error?.code,
+    message: error?.message,
+  });
+}
+
 async function processClaimedDocument(document) {
   try {
     const buffer = await storageService.downloadDocumentBuffer(document.storage_path);
@@ -209,9 +276,24 @@ async function processClaimedDocument(document) {
       chunkCount: chunkRecords.length,
     });
   } catch (error) {
-    await markDocumentFailed(document.id, error);
-    logger.warn('Document indexing failed', {
+    const previousAttemptCount = getRetryAttemptCount(document.last_error);
+    const nextAttempt = previousAttemptCount + 1;
+    const shouldRetry =
+      isRetryableProcessingError(error) &&
+      nextAttempt < env.documentProcessingMaxRetries;
+
+    if (shouldRetry) {
+      await scheduleDocumentRetry(document, error, nextAttempt);
+      return;
+    }
+
+    await markDocumentFailed(document.id, {
+      message: formatFinalFailureMessage(nextAttempt, error),
+    });
+    logger.warn('Document indexing failed permanently', {
       documentId: document.id,
+      attempt: nextAttempt,
+      maxRetries: env.documentProcessingMaxRetries,
       code: error.code,
       message: error.message,
     });

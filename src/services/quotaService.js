@@ -19,6 +19,32 @@ function getRemainingChatRequests(countUsed) {
   return Math.max(0, env.maxChatRequestsPerDay - countUsed);
 }
 
+async function withChatQuotaLock(userId, callback) {
+  if (env.nodeEnv === 'test') {
+    return callback(null);
+  }
+
+  const client = await db.pool.connect();
+
+  try {
+    await client.query(
+      `SELECT pg_advisory_lock(hashtext($1), hashtext($2))`,
+      ['chat_quota', String(userId)],
+    );
+
+    return await callback(client);
+  } finally {
+    try {
+      await client.query(
+        `SELECT pg_advisory_unlock(hashtext($1), hashtext($2))`,
+        ['chat_quota', String(userId)],
+      );
+    } finally {
+      client.release();
+    }
+  }
+}
+
 async function assertUserChatQuotaAvailable(userId) {
   const used = await getTodayChatUsage(userId);
   const remaining = getRemainingChatRequests(used);
@@ -63,4 +89,5 @@ module.exports = {
   getRemainingChatRequests,
   assertUserChatQuotaAvailable,
   recordSuccessfulRequest,
+  withChatQuotaLock,
 };

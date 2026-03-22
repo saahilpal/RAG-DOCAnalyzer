@@ -101,6 +101,12 @@ services:
         value: 1000
       - key: DOCUMENT_PROCESSING_RETRY_AFTER_MS
         value: 900000
+      - key: DOCUMENT_PROCESSING_MAX_RETRIES
+        value: 3
+      - key: AUTH_CLEANUP_INTERVAL_MS
+        value: 900000
+      - key: STALE_UNVERIFIED_USER_RETENTION_HOURS
+        value: 168
       - key: GITHUB_REPOSITORY_URL
         sync: false
       - key: RUN_LOCALLY_GUIDE_URL

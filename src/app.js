@@ -52,6 +52,7 @@ app.use(
   }),
 );
 
+app.use(cookieParser());
 app.use(enforceOriginForMutations);
 
 app.use(
@@ -73,7 +74,6 @@ app.use(
 app.use(morgan(env.isProduction ? 'combined' : 'dev'));
 app.use(express.json({ limit: env.maxRequestBodySize }));
 app.use(express.urlencoded({ extended: false, limit: env.maxRequestBodySize }));
-app.use(cookieParser());
 
 app.use('/api/v1', routes);
 

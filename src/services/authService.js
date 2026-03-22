@@ -4,12 +4,16 @@ const jwt = require('jsonwebtoken');
 
 const db = require('../database/client');
 const env = require('../config/env');
+const logger = require('../config/logger');
 const { AppError, notFound } = require('../utils/errors');
 
 const OTP_PURPOSE = {
   VERIFY_EMAIL: 'verify_email',
   PASSWORD_RESET: 'password_reset',
 };
+
+let cleanupPromise = null;
+let lastCleanupStartedAt = 0;
 
 function normalizeEmail(email) {
   return String(email || '').trim().toLowerCase();
@@ -32,6 +36,81 @@ function getRetryAfterSeconds(createdAt) {
 
 function getHourlyEmailWindowLimitMessage() {
   return 'Too many codes have been sent to this email recently. Please try again in about an hour.';
+}
+
+async function cleanupAuthArtifacts() {
+  return db.withTransaction(async (client) => {
+    const otpDeleteResult = await client.query(
+      `DELETE FROM otp_codes
+       WHERE expires_at < NOW()
+          OR consumed_at IS NOT NULL`,
+    );
+
+    const userDeleteResult = await client.query(
+      `DELETE FROM users u
+       WHERE u.email_verified_at IS NULL
+         AND u.created_at < NOW() - ($1 * interval '1 hour')
+         AND NOT EXISTS (
+           SELECT 1
+           FROM otp_codes o
+           WHERE o.email = u.email
+             AND o.purpose = $2
+             AND o.consumed_at IS NULL
+             AND o.expires_at > NOW()
+         )`,
+      [env.staleUnverifiedUserRetentionHours, OTP_PURPOSE.VERIFY_EMAIL],
+    );
+
+    return {
+      deletedOtpCodes: otpDeleteResult.rowCount || 0,
+      deletedUsers: userDeleteResult.rowCount || 0,
+    };
+  });
+}
+
+async function cleanupAuthArtifactsIfDue(options = {}) {
+  const force = Boolean(options.force);
+  const reason = options.reason || 'periodic';
+  const now = Date.now();
+
+  if (!force && now - lastCleanupStartedAt < env.authCleanupIntervalMs) {
+    return null;
+  }
+
+  if (cleanupPromise) {
+    return cleanupPromise;
+  }
+
+  lastCleanupStartedAt = now;
+  cleanupPromise = cleanupAuthArtifacts()
+    .then((result) => {
+      logger.info('Auth cleanup completed', {
+        reason,
+        deletedOtpCodes: result.deletedOtpCodes,
+        deletedUsers: result.deletedUsers,
+      });
+      return result;
+    })
+    .catch((error) => {
+      logger.warn('Auth cleanup failed', {
+        reason,
+        message: error.message,
+      });
+      return null;
+    })
+    .finally(() => {
+      cleanupPromise = null;
+    });
+
+  return cleanupPromise;
+}
+
+function scheduleAuthCleanup(reason) {
+  if (env.nodeEnv === 'test') {
+    return;
+  }
+
+  void cleanupAuthArtifactsIfDue({ reason }).catch(() => {});
 }
 
 function signAuthToken(user) {
@@ -262,6 +341,7 @@ async function verifyOtpForPurpose({ email, otp, purpose }, client) {
 }
 
 async function signUpWithPassword({ email, password }) {
+  scheduleAuthCleanup('signup');
   const normalizedEmail = normalizeEmail(email);
   const passwordHash = await bcrypt.hash(String(password), 12);
 
@@ -309,6 +389,7 @@ async function signUpWithPassword({ email, password }) {
 }
 
 async function resendVerificationForEmail({ email }) {
+  scheduleAuthCleanup('resend_verification');
   const user = await getUserAuthByEmail(email);
   if (!user) {
     throw new AppError(404, 'ACCOUNT_NOT_FOUND', 'No account exists for this email.');
@@ -325,6 +406,7 @@ async function resendVerificationForEmail({ email }) {
 }
 
 async function verifySignupOtp({ email, otp }) {
+  scheduleAuthCleanup('verify_signup');
   const normalizedEmail = normalizeEmail(email);
 
   const user = await db.withTransaction(async (client) => {
@@ -352,6 +434,7 @@ async function verifySignupOtp({ email, otp }) {
 }
 
 async function loginWithPassword({ email, password }) {
+  scheduleAuthCleanup('login');
   const normalizedEmail = normalizeEmail(email);
   const user = await getUserAuthByEmail(normalizedEmail);
 
@@ -392,6 +475,7 @@ async function loginWithPassword({ email, password }) {
 }
 
 async function requestPasswordReset({ email }) {
+  scheduleAuthCleanup('request_password_reset');
   const normalizedEmail = normalizeEmail(email);
   const user = await getUserAuthByEmail(normalizedEmail);
 
@@ -406,6 +490,7 @@ async function requestPasswordReset({ email }) {
 }
 
 async function resetPassword({ email, otp, newPassword }) {
+  scheduleAuthCleanup('reset_password');
   const normalizedEmail = normalizeEmail(email);
   const newPasswordHash = await bcrypt.hash(String(newPassword), 12);
 
@@ -436,6 +521,7 @@ async function resetPassword({ email, otp, newPassword }) {
 }
 
 async function changePassword({ userId, currentPassword, newPassword }) {
+  scheduleAuthCleanup('change_password');
   const current = String(currentPassword || '');
   const next = String(newPassword || '');
 
@@ -486,4 +572,6 @@ module.exports = {
   changePassword,
   invalidateOtpForEmail,
   invalidateOtpCodeById,
+  cleanupAuthArtifacts,
+  cleanupAuthArtifactsIfDue,
 };

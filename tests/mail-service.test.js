@@ -8,8 +8,9 @@ process.env.SUPABASE_SERVICE_KEY = 'service_key';
 process.env.GEMINI_API_KEY = 'test_key';
 process.env.JWT_SECRET = '12345678901234567890123456789012';
 process.env.CORS_ORIGIN = 'http://localhost:3000';
-process.env.RESEND_API_KEY = 're_test_key';
-process.env.RESEND_FROM = 'DocAnalyzer <onboarding@resend.dev>';
+process.env.EMAIL_USER = 'test@example.com';
+process.env.EMAIL_PASS = 'testpass';
+process.env.EMAIL_FROM = 'DocAnalyzer <test@example.com>';
 
 const logger = require('../src/config/logger');
 const mailService = require('../src/services/mailService');
@@ -108,14 +109,14 @@ test('sendMailWithRetry stops retrying on non-retryable resend errors', async ()
   assert.equal(attempts, 1);
 });
 
-test('buildEmailPayload always uses resend defaults', () => {
+test('buildEmailPayload always uses configured smtp defaults', () => {
   const payload = mailService.buildEmailPayload({
     to: 'user@example.com',
     subject: 'Your verification code',
     html: '<p>Code</p>',
   });
 
-  assert.equal(payload.from, 'DocAnalyzer <onboarding@resend.dev>');
+  assert.equal(payload.from, 'DocAnalyzer <test@example.com>');
   assert.equal(payload.to, 'user@example.com');
   assert.equal(payload.subject, 'Your verification code');
 });

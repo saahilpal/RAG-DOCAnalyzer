@@ -27,27 +27,32 @@ function enforceOriginForMutations(req, res, next) {
   const originHeader = req.get('origin');
   const refererOrigin = getOriginFromReferer(req.get('referer'));
   const requestOrigin = originHeader || refererOrigin;
+  const usingAuthCookie = Boolean(req.cookies?.[env.authCookieName]);
 
   if (!requestOrigin) {
+    if (usingAuthCookie) {
+      return fail(res, 403, 'ORIGIN_REQUIRED', 'Origin or referer is required for authenticated requests.');
+    }
+
     return next();
   }
 
   const isAllowed = allowedOrigins.some((allowedOrigin) => {
-  if (requestOrigin === allowedOrigin) return true;
+    if (requestOrigin === allowedOrigin) return true;
 
-  if (
-    allowedOrigin.includes('vercel.app') &&
-    requestOrigin.endsWith('.vercel.app')
-  ) {
-    return true;
+    if (
+      allowedOrigin.includes('vercel.app') &&
+      requestOrigin.endsWith('.vercel.app')
+    ) {
+      return true;
+    }
+
+    return false;
+  });
+
+  if (!isAllowed) {
+    return fail(res, 403, 'ORIGIN_NOT_ALLOWED', 'Request origin is not allowed for this environment.');
   }
-
-  return false;
-});
-
-if (!isAllowed) {
-  return fail(res, 403, 'ORIGIN_NOT_ALLOWED', 'Request origin is not allowed for this environment.');
-}
 
   return next();
 }

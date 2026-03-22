@@ -11,8 +11,9 @@ process.env.SUPABASE_SERVICE_KEY = 'service_key';
 process.env.GEMINI_API_KEY = 'test_key';
 process.env.JWT_SECRET = '12345678901234567890123456789012';
 process.env.CORS_ORIGIN = 'http://localhost:3000';
-process.env.RESEND_API_KEY = 're_test_key';
-process.env.RESEND_FROM = 'DocAnalyzer <onboarding@resend.dev>';
+process.env.EMAIL_USER = 'test@example.com';
+process.env.EMAIL_PASS = 'testpass';
+process.env.EMAIL_FROM = 'DocAnalyzer <test@example.com>';
 
 const app = require('../src/app');
 const env = require('../src/config/env');

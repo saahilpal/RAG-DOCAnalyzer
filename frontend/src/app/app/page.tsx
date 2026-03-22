@@ -26,7 +26,6 @@ export default function DashboardChatPage() {
     composerError,
     canRetryLastMessage,
     chatQuota,
-    runLocallyGuideUrl,
     sendMessage,
     retryLastMessage,
     clearComposerError,
@@ -114,14 +113,14 @@ export default function DashboardChatPage() {
         ? 'Processing document...'
         : hasReadyDocument
           ? ''
-          : 'Upload a document to begin.';
+          : 'Upload a document to start asking questions.';
   const composerPlaceholder = hasReadyDocument
-    ? 'Ask something about your document...'
-    : pendingAttachments > 0
-      ? 'Processing document...'
-      : hasMultipleActiveDocuments
-        ? 'Keep one document in this chat'
-        : 'Upload a document to begin';
+      ? 'Ask something about your document...'
+      : pendingAttachments > 0
+        ? 'Processing document...'
+        : hasMultipleActiveDocuments
+          ? 'Keep one document in this chat'
+        : 'Upload a document to start asking questions';
   const composerDisabled = quotaReached || !hasReadyDocument;
   const attachDisabled = quotaReached || activeAttachments.length >= 1;
 
@@ -202,7 +201,7 @@ export default function DashboardChatPage() {
           ) : (
             <div className="mx-auto flex h-full w-full max-w-[760px] flex-col items-center justify-center px-3 text-center">
               <h1 className="font-display text-3xl font-semibold tracking-tight text-[var(--foreground)] md:text-4xl">
-                Upload a document to begin.
+                Upload a document to start asking questions.
               </h1>
               <p className="mt-2 max-w-xl text-sm leading-6 text-[var(--muted)]">
                 Once it is ready, ask focused questions about a topic, section, or concept.
@@ -298,15 +297,14 @@ export default function DashboardChatPage() {
 
         <Modal
           open={quotaModalOpen}
-          title="Usage reached for today"
-          description="You have used the available hosted usage for this workspace."
-          confirmLabel="Run locally"
+          title="Daily usage limit reached"
+          description="This hosted workspace has a small daily usage cap."
           cancelLabel="Close"
           onClose={() => setQuotaModalOpen(false)}
-          onConfirm={() => window.open(runLocallyGuideUrl, '_blank', 'noopener,noreferrer')}
         >
           <div className="rounded-md border border-[color:var(--line)] bg-[var(--panel-strong)] px-4 py-3 text-sm leading-6 text-[var(--muted)]">
-            Run the project locally for uninterrupted usage with the same interface and full control.
+            You have used the available messages for today. Please come back tomorrow to continue chatting with your
+            document.
           </div>
         </Modal>
       </div>

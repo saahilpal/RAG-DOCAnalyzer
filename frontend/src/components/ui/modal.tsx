@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useId, useRef, type KeyboardEvent, type ReactNode } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -14,7 +15,7 @@ type ModalProps = {
   confirmVariant?: 'primary' | 'secondary' | 'ghost' | 'danger';
   onConfirm?: () => void;
   onClose: () => void;
-  children?: React.ReactNode;
+  children?: ReactNode;
 };
 
 export function Modal({
@@ -28,6 +29,70 @@ export function Modal({
   onClose,
   children,
 }: ModalProps) {
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const titleId = useId();
+  const descriptionId = useId();
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    const previousActiveElement =
+      typeof document !== 'undefined' ? (document.activeElement as HTMLElement | null) : null;
+
+    const frame = window.requestAnimationFrame(() => {
+      const focusable = dialogRef.current?.querySelector<HTMLElement>(
+        'button:not([disabled]), [href], input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      );
+
+      (focusable || dialogRef.current)?.focus();
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      previousActiveElement?.focus?.();
+    };
+  }, [open]);
+
+  function handleKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      onClose();
+      return;
+    }
+
+    if (event.key !== 'Tab' || !dialogRef.current) {
+      return;
+    }
+
+    const focusableElements = Array.from(
+      dialogRef.current.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), [href], input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      ),
+    );
+
+    if (focusableElements.length === 0) {
+      event.preventDefault();
+      dialogRef.current.focus();
+      return;
+    }
+
+    const first = focusableElements[0];
+    const last = focusableElements[focusableElements.length - 1];
+    const activeElement = document.activeElement as HTMLElement | null;
+
+    if (!event.shiftKey && activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+
+    if (event.shiftKey && activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    }
+  }
+
   return (
     <AnimatePresence>
       {open ? (
@@ -42,17 +107,28 @@ export function Modal({
           <motion.div
             role="dialog"
             aria-modal="true"
+            aria-labelledby={titleId}
+            aria-describedby={description ? descriptionId : undefined}
+            tabIndex={-1}
+            ref={dialogRef}
             className="w-full max-w-md rounded-md border border-[color:var(--line)] bg-[var(--panel-strong)] p-5"
             initial={{ y: 16, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 8, opacity: 0 }}
             transition={transitions.panelEnter}
             onClick={(event) => event.stopPropagation()}
+            onKeyDown={handleKeyDown}
           >
             <div className="mb-4 flex items-start justify-between gap-4">
               <div>
-                <h3 className="text-base font-semibold text-[var(--foreground)]">{title}</h3>
-                {description ? <p className="mt-1 text-sm text-[var(--muted)]">{description}</p> : null}
+                <h3 id={titleId} className="text-base font-semibold text-[var(--foreground)]">
+                  {title}
+                </h3>
+                {description ? (
+                  <p id={descriptionId} className="mt-1 text-sm text-[var(--muted)]">
+                    {description}
+                  </p>
+                ) : null}
               </div>
               <button
                 type="button"

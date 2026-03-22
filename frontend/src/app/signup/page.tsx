@@ -1,11 +1,19 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { Suspense, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { AuthCard } from '@/components/auth/auth-card';
 import { LogoMark } from '@/components/common/logo-mark';
 import { useAuth } from '@/hooks/use-auth';
+
+function SignupCardShell() {
+  const searchParams = useSearchParams();
+  const prefilledEmail = searchParams.get('email') || '';
+  const initialStep = searchParams.get('step') === 'verify' ? 'verify' : 'form';
+
+  return <AuthCard mode="signup" prefilledEmail={prefilledEmail} initialStep={initialStep} />;
+}
 
 export default function SignupPage() {
   const router = useRouter();
@@ -44,7 +52,9 @@ export default function SignupPage() {
         </section>
 
         <section className="flex items-center justify-center px-6 pb-8 pt-0 sm:px-8 lg:px-12 lg:py-10">
-          <AuthCard mode="signup" />
+          <Suspense fallback={<AuthCard mode="signup" />}>
+            <SignupCardShell />
+          </Suspense>
         </section>
       </div>
     </main>

@@ -14,6 +14,7 @@ import { ApiError } from '@/lib/api';
 import { transitions } from '@/lib/motion';
 
 type AuthMode = 'login' | 'signup' | 'reset';
+type AuthStep = 'form' | 'verify' | 'request' | 'complete';
 
 const OTP_LENGTH = 6;
 const DEFAULT_RESEND_COOLDOWN_SECONDS = 60;
@@ -50,6 +51,30 @@ function getRetryAfterSeconds(error: unknown) {
   }
 
   return null;
+}
+
+function getPasswordValidationMessage(password: string) {
+  if (password.length < 8) {
+    return 'Password must be at least 8 characters.';
+  }
+
+  if (!/[A-Za-z]/.test(password) || !/\d/.test(password)) {
+    return 'Password must include at least one letter and one number.';
+  }
+
+  return null;
+}
+
+function getInitialStep(mode: AuthMode, initialStep?: AuthStep): AuthStep {
+  if (mode === 'signup' && initialStep === 'verify') {
+    return 'verify';
+  }
+
+  if (mode === 'reset') {
+    return initialStep === 'verify' || initialStep === 'complete' ? initialStep : 'request';
+  }
+
+  return 'form';
 }
 
 function getFriendlyAuthMessage(error: unknown, fallback: string) {
@@ -97,9 +122,11 @@ function getFriendlyAuthMessage(error: unknown, fallback: string) {
 export function AuthCard({
   mode = 'login',
   prefilledEmail = '',
+  initialStep,
 }: {
   mode?: AuthMode;
   prefilledEmail?: string;
+  initialStep?: AuthStep;
 }) {
   const router = useRouter();
   const {
@@ -111,9 +138,7 @@ export function AuthCard({
     resetPasswordWithCode,
   } = useAuth();
 
-  const [step, setStep] = useState<'form' | 'verify' | 'request' | 'complete'>(
-    mode === 'signup' ? 'form' : mode === 'reset' ? 'request' : 'form',
-  );
+  const [step, setStep] = useState<AuthStep>(getInitialStep(mode, initialStep));
   const [email, setEmail] = useState(prefilledEmail);
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -124,6 +149,7 @@ export function AuthCard({
   const [resendCooldownRemaining, setResendCooldownRemaining] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [authErrorCode, setAuthErrorCode] = useState<string | null>(null);
   const [notice, setNotice] = useState('');
   const [errorShakeKey, setErrorShakeKey] = useState(0);
 
@@ -135,16 +161,30 @@ export function AuthCard({
   const showPasswordFields = mode === 'login' || (mode === 'signup' && step === 'form');
 
   const setFriendlyError = useCallback((nextError: unknown, fallback: string) => {
+    setAuthErrorCode(nextError instanceof ApiError ? nextError.code || null : null);
     setError(getFriendlyAuthMessage(nextError, fallback));
     setErrorShakeKey((current) => current + 1);
   }, []);
 
-  useEffect(() => {
+  const clearErrorState = useCallback(() => {
+    setError('');
+    setAuthErrorCode(null);
+  }, []);
+
+  const addDeliveryHint = useCallback((message: string) => {
+    return `${message} Delivery can take up to a minute.`;
+  }, []);
+
+  const persistNotice = useCallback((message: string) => {
     if (typeof window === 'undefined') {
       return;
     }
 
-    if (mode !== 'login') {
+    window.sessionStorage.setItem(AUTH_NOTICE_STORAGE_KEY, message);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
       return;
     }
 
@@ -192,12 +232,15 @@ export function AuthCard({
   function validatePasswordMatch(left: string, right: string) {
     if (left !== right) {
       setError('Passwords must match.');
+      setAuthErrorCode(null);
       setErrorShakeKey((current) => current + 1);
       return false;
     }
 
-    if (left.length < 8) {
-      setError('Password must be at least 8 characters.');
+    const passwordMessage = getPasswordValidationMessage(left);
+    if (passwordMessage) {
+      setError(passwordMessage);
+      setAuthErrorCode(null);
       setErrorShakeKey((current) => current + 1);
       return false;
     }
@@ -210,12 +253,13 @@ export function AuthCard({
 
     if (!isValidEmail(email)) {
       setError('Enter a valid email address.');
+      setAuthErrorCode(null);
       setErrorShakeKey((current) => current + 1);
       return;
     }
 
     setLoading(true);
-    setError('');
+    clearErrorState();
     setNotice('');
 
     try {
@@ -233,6 +277,7 @@ export function AuthCard({
 
     if (!isValidEmail(email)) {
       setError('Enter a valid email address.');
+      setAuthErrorCode(null);
       setErrorShakeKey((current) => current + 1);
       return;
     }
@@ -242,7 +287,7 @@ export function AuthCard({
     }
 
     setLoading(true);
-    setError('');
+    clearErrorState();
     setNotice('');
 
     try {
@@ -266,12 +311,13 @@ export function AuthCard({
   async function handleVerifySignup() {
     if (joinedOtp.length !== OTP_LENGTH) {
       setError('Enter the full 6-digit code.');
+      setAuthErrorCode(null);
       setErrorShakeKey((current) => current + 1);
       return;
     }
 
     setLoading(true);
-    setError('');
+    clearErrorState();
 
     try {
       await verifySignupCode(email, joinedOtp);
@@ -287,7 +333,7 @@ export function AuthCard({
 
   async function handleResendVerification() {
     setLoading(true);
-    setError('');
+    clearErrorState();
     setNotice('');
 
     try {
@@ -295,7 +341,7 @@ export function AuthCard({
       setExpiresInSeconds(result.expiresInSeconds || DEFAULT_EXPIRY_SECONDS);
       setResendCooldownRemaining(result.resendCooldownSeconds || DEFAULT_RESEND_COOLDOWN_SECONDS);
       resetOtpInputs();
-      setNotice(result.message);
+      setNotice(addDeliveryHint(result.message));
       focusOtpIndex(0);
     } catch (submitError) {
       const retryAfterSeconds = getRetryAfterSeconds(submitError);
@@ -313,12 +359,13 @@ export function AuthCard({
 
     if (!isValidEmail(email)) {
       setError('Enter a valid email address.');
+      setAuthErrorCode(null);
       setErrorShakeKey((current) => current + 1);
       return;
     }
 
     setLoading(true);
-    setError('');
+    clearErrorState();
     setNotice('');
 
     try {
@@ -326,7 +373,7 @@ export function AuthCard({
       setStep('verify');
       setExpiresInSeconds(result.expiresInSeconds || DEFAULT_EXPIRY_SECONDS);
       setResendCooldownRemaining(result.resendCooldownSeconds || DEFAULT_RESEND_COOLDOWN_SECONDS);
-      setNotice(result.message);
+      setNotice(addDeliveryHint(result.message));
       resetOtpInputs();
     } catch (submitError) {
       const retryAfterSeconds = getRetryAfterSeconds(submitError);
@@ -344,6 +391,7 @@ export function AuthCard({
 
     if (joinedOtp.length !== OTP_LENGTH) {
       setError('Enter the full 6-digit code.');
+      setAuthErrorCode(null);
       setErrorShakeKey((current) => current + 1);
       return;
     }
@@ -353,7 +401,7 @@ export function AuthCard({
     }
 
     setLoading(true);
-    setError('');
+    clearErrorState();
 
     try {
       await resetPasswordWithCode(email, joinedOtp, newPassword);
@@ -425,6 +473,33 @@ export function AuthCard({
     focusOtpIndex(Math.min(pastedDigits.length, OTP_LENGTH) - 1);
   }
 
+  async function handleLoginResendVerification() {
+    if (!isValidEmail(email)) {
+      setError('Enter your email address to resend verification.');
+      setAuthErrorCode(null);
+      setErrorShakeKey((current) => current + 1);
+      return;
+    }
+
+    setLoading(true);
+    clearErrorState();
+    setNotice('');
+
+    try {
+      const result = await resendSignupVerification(email);
+      persistNotice(addDeliveryHint(result.message));
+      router.push(`/signup?email=${encodeURIComponent(email)}&step=verify`);
+    } catch (submitError) {
+      const retryAfterSeconds = getRetryAfterSeconds(submitError);
+      if (retryAfterSeconds) {
+        setResendCooldownRemaining(retryAfterSeconds);
+      }
+      setFriendlyError(submitError, 'We could not resend verification right now. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
@@ -459,8 +534,8 @@ export function AuthCard({
               : step === 'complete'
                 ? 'Your password has been updated successfully.'
                 : step === 'verify'
-                  ? 'Enter the 6-digit code from your email and choose a new password.'
-                  : 'We will send a secure reset code to your email.'}
+                  ? 'Enter the 6-digit code from your email and choose a new password. Delivery can take up to a minute.'
+                  : 'We will send a secure reset code to your email. Delivery can take up to a minute.'}
         </p>
 
         <motion.div
@@ -482,9 +557,7 @@ export function AuthCard({
                   value={email}
                   onChange={(event) => {
                     setEmail(event.target.value);
-                    if (error) {
-                      setError('');
-                    }
+                    clearErrorState();
                   }}
                   placeholder="you@company.com"
                   maxLength={255}
@@ -504,9 +577,7 @@ export function AuthCard({
                     value={password}
                     onChange={(event) => {
                       setPassword(event.target.value);
-                      if (error) {
-                        setError('');
-                      }
+                      clearErrorState();
                     }}
                     placeholder="Enter your password"
                     required
@@ -552,6 +623,20 @@ export function AuthCard({
                 ) : null}
               </AnimatePresence>
 
+              {authErrorCode === 'EMAIL_NOT_VERIFIED' ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="w-full"
+                  disabled={loading}
+                  onClick={() => {
+                    void handleLoginResendVerification();
+                  }}
+                >
+                  Resend verification code
+                </Button>
+              ) : null}
+
               <Button type="submit" className="w-full" disabled={loading}>
                 {loading ? 'Signing in...' : 'Sign in'}
               </Button>
@@ -572,9 +657,7 @@ export function AuthCard({
                   value={email}
                   onChange={(event) => {
                     setEmail(event.target.value);
-                    if (error) {
-                      setError('');
-                    }
+                    clearErrorState();
                   }}
                   placeholder="you@company.com"
                   maxLength={255}
@@ -593,9 +676,7 @@ export function AuthCard({
                   value={password}
                   onChange={(event) => {
                     setPassword(event.target.value);
-                    if (error) {
-                      setError('');
-                    }
+                    clearErrorState();
                   }}
                   placeholder="At least 8 characters"
                   required
@@ -613,9 +694,7 @@ export function AuthCard({
                   value={confirmPassword}
                   onChange={(event) => {
                     setConfirmPassword(event.target.value);
-                    if (error) {
-                      setError('');
-                    }
+                    clearErrorState();
                   }}
                   placeholder="Confirm your password"
                   required
@@ -663,9 +742,7 @@ export function AuthCard({
                       value={digit}
                       onChange={(event) => {
                         handleOtpChange(index, event.target.value);
-                        if (error) {
-                          setError('');
-                        }
+                        clearErrorState();
                       }}
                       onKeyDown={(event) => handleOtpKeyDown(index, event)}
                       inputMode="numeric"
@@ -681,7 +758,9 @@ export function AuthCard({
               <div className="flex items-center justify-between gap-3 rounded-[20px] border border-[color:var(--line)] bg-[var(--panel)] px-4 py-3">
                 <div className="flex items-center gap-2 text-sm text-[var(--muted)]">
                   <Mail size={16} />
-                  <span aria-live="polite">{notice || 'Check your inbox for the latest code.'}</span>
+                  <span aria-live="polite">
+                    {notice || 'Check your inbox for the latest code. Delivery can take up to a minute.'}
+                  </span>
                 </div>
 
                 <button
@@ -695,7 +774,7 @@ export function AuthCard({
                     }
 
                     setLoading(true);
-                    setError('');
+                    clearErrorState();
                     setNotice('');
                     void requestPasswordResetCode(email)
                       .then((result) => {
@@ -703,7 +782,7 @@ export function AuthCard({
                         setResendCooldownRemaining(
                           result.resendCooldownSeconds || DEFAULT_RESEND_COOLDOWN_SECONDS,
                         );
-                        setNotice(result.message);
+                        setNotice(addDeliveryHint(result.message));
                         resetOtpInputs();
                       })
                       .catch((submitError) => {
@@ -735,9 +814,7 @@ export function AuthCard({
                       value={newPassword}
                       onChange={(event) => {
                         setNewPassword(event.target.value);
-                        if (error) {
-                          setError('');
-                        }
+                        clearErrorState();
                       }}
                       placeholder="At least 8 characters"
                       required
@@ -755,9 +832,7 @@ export function AuthCard({
                       value={confirmNewPassword}
                       onChange={(event) => {
                         setConfirmNewPassword(event.target.value);
-                        if (error) {
-                          setError('');
-                        }
+                        clearErrorState();
                       }}
                       placeholder="Confirm your new password"
                       required
@@ -786,7 +861,7 @@ export function AuthCard({
                       className="flex-1"
                       onClick={() => {
                         setStep('request');
-                        setError('');
+                        clearErrorState();
                         setNotice('');
                         resetOtpInputs();
                       }}
@@ -823,7 +898,7 @@ export function AuthCard({
                       className="flex-1"
                       onClick={() => {
                         setStep('form');
-                        setError('');
+                        clearErrorState();
                         setNotice('');
                         resetOtpInputs();
                       }}
@@ -862,9 +937,7 @@ export function AuthCard({
                   value={email}
                   onChange={(event) => {
                     setEmail(event.target.value);
-                    if (error) {
-                      setError('');
-                    }
+                    clearErrorState();
                   }}
                   placeholder="you@company.com"
                   maxLength={255}

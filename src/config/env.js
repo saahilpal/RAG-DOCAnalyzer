@@ -63,6 +63,9 @@ const envSchema = z.object({
     }),
   WORKER_POLL_INTERVAL_MS: z.coerce.number().int().positive().default(1_000),
   DOCUMENT_PROCESSING_RETRY_AFTER_MS: z.coerce.number().int().positive().default(15 * 60 * 1000),
+  DOCUMENT_PROCESSING_MAX_RETRIES: z.coerce.number().int().positive().default(3),
+  AUTH_CLEANUP_INTERVAL_MS: z.coerce.number().int().positive().default(15 * 60 * 1000),
+  STALE_UNVERIFIED_USER_RETENTION_HOURS: z.coerce.number().int().positive().default(24 * 7),
 
   GITHUB_REPOSITORY_URL: z.string().url().default('https://github.com/saahilpal/RAG-DOCAnalyzer'),
   RUN_LOCALLY_GUIDE_URL: z.string().url().default('https://github.com/saahilpal/RAG-DOCAnalyzer#quick-start'),
@@ -148,6 +151,9 @@ module.exports = {
   enableDocumentWorker: env.ENABLE_DOCUMENT_WORKER,
   workerPollIntervalMs: env.WORKER_POLL_INTERVAL_MS,
   documentProcessingRetryAfterMs: env.DOCUMENT_PROCESSING_RETRY_AFTER_MS,
+  documentProcessingMaxRetries: env.DOCUMENT_PROCESSING_MAX_RETRIES,
+  authCleanupIntervalMs: env.AUTH_CLEANUP_INTERVAL_MS,
+  staleUnverifiedUserRetentionHours: env.STALE_UNVERIFIED_USER_RETENTION_HOURS,
 
   githubRepositoryUrl: env.GITHUB_REPOSITORY_URL,
   runLocallyGuideUrl: env.RUN_LOCALLY_GUIDE_URL,

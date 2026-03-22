@@ -9,6 +9,10 @@ function sanitizeFileName(fileName) {
   return `${baseName || 'document'}${ext || '.pdf'}`;
 }
 
+function buildPrivateFileReference(storagePath) {
+  return storagePath;
+}
+
 async function uploadDocumentBuffer({ userId, originalName, buffer, mimeType }) {
   const safeName = sanitizeFileName(originalName);
   const storagePath = `${userId}/${Date.now()}-${safeName}`;
@@ -26,11 +30,9 @@ async function uploadDocumentBuffer({ userId, originalName, buffer, mimeType }) 
     });
   }
 
-  const { data } = supabase.storage.from(env.supabaseStorageBucket).getPublicUrl(storagePath);
-
   return {
     storagePath,
-    fileUrl: data?.publicUrl || storagePath,
+    fileUrl: buildPrivateFileReference(storagePath),
   };
 }
 

@@ -34,18 +34,19 @@ async function listChats({ userId, limit = 50 }) {
             lm.created_at AS last_message_at,
             COALESCE(dc.attachment_count, 0)::int AS attachment_count
      FROM chats c
-     LEFT JOIN LATERAL (
-       SELECT content, created_at
+     LEFT JOIN (
+       SELECT DISTINCT ON (chat_id)
+              chat_id,
+              content,
+              created_at
        FROM messages
-       WHERE chat_id = c.id
-       ORDER BY created_at DESC
-       LIMIT 1
-     ) lm ON TRUE
-     LEFT JOIN LATERAL (
-       SELECT COUNT(*)::int AS attachment_count
+       ORDER BY chat_id, created_at DESC
+     ) lm ON lm.chat_id = c.id
+     LEFT JOIN (
+       SELECT chat_id, COUNT(*)::int AS attachment_count
        FROM chat_documents
-       WHERE chat_id = c.id
-     ) dc ON TRUE
+       GROUP BY chat_id
+     ) dc ON dc.chat_id = c.id
      WHERE c.user_id = $1
      ORDER BY c.pinned DESC, c.updated_at DESC
      LIMIT $2`,
@@ -220,6 +221,66 @@ async function saveAssistantMessageAndConsumeQuota({ userId, chatId, content }) 
   });
 }
 
+async function removeFailedUserMessage({ userId, chatId, messageId, content }) {
+  if (!messageId) {
+    return { removed: false };
+  }
+
+  return db.withTransaction(async (client) => {
+    const chatResult = await client.query(
+      `SELECT id, title, created_at
+       FROM chats
+       WHERE id = $1
+         AND user_id = $2
+       LIMIT 1
+       FOR UPDATE`,
+      [chatId, userId],
+    );
+
+    if (chatResult.rowCount === 0) {
+      return { removed: false };
+    }
+
+    const deleteResult = await client.query(
+      `DELETE FROM messages
+       WHERE id = $1
+         AND chat_id = $2
+         AND role = 'user'
+       RETURNING id`,
+      [messageId, chatId],
+    );
+
+    if (deleteResult.rowCount === 0) {
+      return { removed: false };
+    }
+
+    const lastMessageResult = await client.query(
+      `SELECT created_at
+       FROM messages
+       WHERE chat_id = $1
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [chatId],
+    );
+
+    const chat = chatResult.rows[0];
+    const lastMessageAt = lastMessageResult.rows[0]?.created_at || null;
+    const shouldResetTitle =
+      !lastMessageAt &&
+      chat.title === buildChatTitle(content);
+
+    await client.query(
+      `UPDATE chats
+       SET updated_at = $2,
+           title = CASE WHEN $3 THEN 'New Chat' ELSE title END
+       WHERE id = $1`,
+      [chatId, lastMessageAt || chat.created_at, shouldResetTitle],
+    );
+
+    return { removed: true };
+  });
+}
+
 module.exports = {
   buildChatTitle,
   createChat,
@@ -231,4 +292,5 @@ module.exports = {
   getRecentChatMessages,
   createUserMessage,
   saveAssistantMessageAndConsumeQuota,
+  removeFailedUserMessage,
 };

@@ -10,8 +10,9 @@ process.env.SUPABASE_SERVICE_KEY = 'service_key';
 process.env.GEMINI_API_KEY = 'test_key';
 process.env.JWT_SECRET = '12345678901234567890123456789012';
 process.env.CORS_ORIGIN = 'http://localhost:3000';
-process.env.RESEND_API_KEY = 're_test_key';
-process.env.RESEND_FROM = 'DocAnalyzer <onboarding@resend.dev>';
+process.env.EMAIL_USER = 'test@example.com';
+process.env.EMAIL_PASS = 'testpass';
+process.env.EMAIL_FROM = 'DocAnalyzer <test@example.com>';
 
 const app = require('../src/app');
 const { AppError } = require('../src/utils/errors');
@@ -158,6 +159,9 @@ test('stream endpoint surfaces explicit retrieval errors and skips assistant per
     content: 'Follow up',
     created_at: new Date().toISOString(),
   }));
+  const cleanupMock = t.mock.method(chatService, 'removeFailedUserMessage', async () => ({
+    removed: true,
+  }));
   t.mock.method(ragService, 'streamAssistantReply', async () => {
     throw new AppError(503, 'RETRIEVAL_FAILED', 'Failed to retrieve document context.');
   });
@@ -179,6 +183,7 @@ test('stream endpoint surfaces explicit retrieval errors and skips assistant per
   assert.match(response.body, /event: error/);
   assert.match(response.body, /RETRIEVAL_FAILED/);
   assert.equal(saveMock.mock.callCount(), 0);
+  assert.equal(cleanupMock.mock.callCount(), 1);
 });
 
 test('upload endpoint returns ATTACHMENT_LIMIT_REACHED when a fourth file is attached', async (t) => {
@@ -348,6 +353,9 @@ test('disconnect during stream does not save an assistant message or consume quo
     content: 'Follow up',
     created_at: new Date().toISOString(),
   }));
+  const cleanupMock = t.mock.method(chatService, 'removeFailedUserMessage', async () => ({
+    removed: true,
+  }));
   t.mock.method(ragService, 'streamAssistantReply', async () => {
     throw new AppError(499, 'CLIENT_DISCONNECTED', 'Client disconnected before response completed.');
   });
@@ -370,6 +378,7 @@ test('disconnect during stream does not save an assistant message or consume quo
 
   assert.equal(nextError, null);
   assert.equal(saveMock.mock.callCount(), 0);
+  assert.equal(cleanupMock.mock.callCount(), 1);
 });
 
 test('worker moves a processing document to indexed with chunks', async (t) => {

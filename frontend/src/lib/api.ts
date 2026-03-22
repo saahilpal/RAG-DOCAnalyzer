@@ -48,12 +48,6 @@ export type WorkspaceLimits = {
   chatMessageListLimit: number;
   ragTopK: number;
   workerPollIntervalMs: number;
-  otpExpiresInSeconds?: number;
-  otpResendCooldownSeconds?: number;
-  otpMaxAttempts?: number;
-  otpMaxRequestsPerHour?: number;
-  otpRequestIpRateLimitMax?: number;
-  otpVerifyIpRateLimitMax?: number;
 };
 
 export type OtpDeliveryMeta = {

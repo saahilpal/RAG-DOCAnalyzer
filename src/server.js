@@ -18,6 +18,7 @@ const env = require('./config/env');
 const logger = require('./config/logger');
 const { closePool } = require('./database/client');
 const { startDocumentWorker, stopDocumentWorker } = require('./services/documentWorkerService');
+const { cleanupAuthArtifactsIfDue } = require('./services/authService');
 
 const server = app.listen(env.port, env.host, () => {
   logger.info('Server started', {
@@ -29,6 +30,7 @@ const server = app.listen(env.port, env.host, () => {
   logger.info(`Using Gemini embedding model: ${env.geminiEmbeddingModel}`, {
     embeddingDimension: env.embeddingDimension,
   });
+  void cleanupAuthArtifactsIfDue({ force: true, reason: 'startup' });
 
   if (env.enableDocumentWorker) {
     startDocumentWorker();

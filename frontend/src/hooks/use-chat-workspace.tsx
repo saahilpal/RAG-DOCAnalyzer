@@ -88,7 +88,8 @@ const ChatWorkspaceContext = createContext<ChatWorkspaceContextValue | null>(nul
 const DEFAULT_REPOSITORY_URL = 'https://github.com/saahilpal/RAG-DOCAnalyzer';
 const AUTO_RETRY_ATTEMPTS = 1;
 const AUTO_RETRY_DELAY_MS = 750;
-const DOCUMENT_UPLOAD_REQUIRED_MESSAGE = 'Upload a document to begin.';
+const DOCUMENT_POLL_INTERVAL_MS = 5_000;
+const DOCUMENT_UPLOAD_REQUIRED_MESSAGE = 'Upload a document to start asking questions.';
 const DOCUMENT_PROCESSING_MESSAGE = 'Processing your document... this will take a few seconds.';
 const SINGLE_DOCUMENT_MESSAGE = 'Keep one document attached to this chat to continue.';
 
@@ -429,6 +430,7 @@ export function ChatWorkspaceProvider({ children }: { children: React.ReactNode 
       const chatId = targetChatId || (await ensureActiveChat());
       let clientMessageId = randomClientMessageId();
       const optimisticMessageId = `temp-${clientMessageId}`;
+      let persistedUserMessageId: string | null = null;
       let metaReceived = false;
       let attemptsUsed = 0;
       let lastError: unknown = null;
@@ -466,6 +468,7 @@ export function ChatWorkspaceProvider({ children }: { children: React.ReactNode 
                 if (event.type === 'chat.meta') {
                   metaReceived = true;
                   metaReceivedThisAttempt = true;
+                  persistedUserMessageId = event.data.userMessageId;
                   setServerMessages((current) =>
                     current.map((message) =>
                       message.id === optimisticMessageId
@@ -515,10 +518,13 @@ export function ChatWorkspaceProvider({ children }: { children: React.ReactNode 
               setComposerError('');
               setLastFailedMessage(null);
               setStreamingMessage(null);
-
-              if (!metaReceived) {
-                setServerMessages((current) => current.filter((message) => message.id !== optimisticMessageId));
-              }
+              setServerMessages((current) =>
+                current.filter(
+                  (message) =>
+                    message.id !== optimisticMessageId &&
+                    (!persistedUserMessageId || message.id !== persistedUserMessageId),
+                ),
+              );
 
               return;
             }
@@ -552,10 +558,13 @@ export function ChatWorkspaceProvider({ children }: { children: React.ReactNode 
         setComposerError(formatStreamFailureMessage(lastError, attemptsUsed > 0));
         setLastFailedMessage({ chatId, content: trimmed });
         setStreamingMessage(null);
-
-        if (!metaReceived) {
-          setServerMessages((current) => current.filter((message) => message.id !== optimisticMessageId));
-        }
+        setServerMessages((current) =>
+          current.filter(
+            (message) =>
+              message.id !== optimisticMessageId &&
+              (!persistedUserMessageId || message.id !== persistedUserMessageId),
+          ),
+        );
       } finally {
         setSending(false);
       }
@@ -751,14 +760,37 @@ export function ChatWorkspaceProvider({ children }: { children: React.ReactNode 
             return;
           }
 
+          let shouldRefreshChats = false;
           setAttachments((current) => {
             const tempFailures = current.filter((document) => document.isTemp && document.status === 'failed');
-            return [...data.documents, ...tempFailures];
+            const currentDocuments = current.filter((document) => !document.isTemp);
+
+            shouldRefreshChats =
+              currentDocuments.length !== data.documents.length ||
+              currentDocuments.some((document, index) => {
+                const nextDocument = data.documents[index];
+
+                if (!nextDocument) {
+                  return true;
+                }
+
+                return (
+                  document.id !== nextDocument.id ||
+                  document.status !== nextDocument.status ||
+                  document.indexed_at !== nextDocument.indexed_at ||
+                  document.last_error !== nextDocument.last_error
+                );
+              });
+
+            return shouldRefreshChats ? [...data.documents, ...tempFailures] : current;
           });
-          refreshChats().catch(() => {});
+
+          if (shouldRefreshChats) {
+            refreshChats().catch(() => {});
+          }
         })
         .catch(() => {});
-    }, 2_000);
+    }, DOCUMENT_POLL_INTERVAL_MS);
 
     return () => {
       clearInterval(interval);

@@ -105,4 +105,41 @@ describe('AuthCard', () => {
 
     await screen.findByText('Email or password is incorrect.');
   });
+
+  it('offers resend verification after an unverified login attempt', async () => {
+    authMocks.signInWithPassword.mockRejectedValue(
+      new ApiError('Verify first', {
+        status: 403,
+        code: 'EMAIL_NOT_VERIFIED',
+      }),
+    );
+    authMocks.resendSignupVerification.mockResolvedValue({
+      message: 'Verification code sent.',
+      expiresInSeconds: 300,
+      resendCooldownSeconds: 60,
+    });
+
+    render(<AuthCard mode="login" />);
+
+    fireEvent.change(screen.getByLabelText(/^email$/i), {
+      target: { value: 'user@example.com' },
+    });
+    fireEvent.change(screen.getByLabelText(/^password$/i), {
+      target: { value: 'SecurePass123' },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /sign in/i }));
+
+    await screen.findByText('Verify your email before signing in.');
+
+    fireEvent.click(screen.getByRole('button', { name: /resend verification code/i }));
+
+    await waitFor(() => {
+      expect(authMocks.resendSignupVerification).toHaveBeenCalledWith('user@example.com');
+    });
+
+    await waitFor(() => {
+      expect(routerMocks.push).toHaveBeenCalledWith('/signup?email=user%40example.com&step=verify');
+    });
+  });
 });

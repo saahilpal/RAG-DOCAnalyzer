@@ -102,89 +102,123 @@ async function streamMessage(req, res, next) {
   let streamStarted = false;
   let clientDisconnected = false;
   let userMessageId = null;
+  let assistantMessageSaved = false;
 
   req.on('close', () => {
     clientDisconnected = true;
   });
 
+  async function cleanupFailedUserMessage() {
+    if (!userMessageId || assistantMessageSaved) {
+      return;
+    }
+
+    try {
+      await chatService.removeFailedUserMessage({
+        userId,
+        chatId,
+        messageId: userMessageId,
+        content,
+      });
+    } catch (cleanupError) {
+      logger.warn('Failed to cleanup interrupted chat message', {
+        chatId,
+        userId,
+        userMessageId,
+        message: cleanupError.message,
+      });
+    } finally {
+      userMessageId = null;
+    }
+  }
+
   try {
-    await chatService.getOwnedChat({ userId, chatId });
-    await quotaService.assertUserChatQuotaAvailable(userId);
+    await quotaService.withChatQuotaLock(userId, async () => {
+      await chatService.getOwnedChat({ userId, chatId });
+      await quotaService.assertUserChatQuotaAvailable(userId);
 
-    const attachedDocuments = await documentService.listChatDocuments({ userId, chatId });
-    const indexedDocuments = attachedDocuments.filter((document) => document.status === 'indexed');
-    const history = await chatService.getRecentChatMessages({
-      userId,
-      chatId,
-      limit: env.chatHistoryLimit,
+      const attachedDocuments = await documentService.listChatDocuments({ userId, chatId });
+      const indexedDocuments = attachedDocuments.filter((document) => document.status === 'indexed');
+      const history = await chatService.getRecentChatMessages({
+        userId,
+        chatId,
+        limit: env.chatHistoryLimit,
+      });
+
+      if (attachedDocuments.length > 0 && indexedDocuments.length === 0) {
+        throw new AppError(
+          409,
+          'DOCUMENTS_NOT_READY',
+          'Attached documents are still processing. Please wait until at least one document is ready.',
+        );
+      }
+
+      const userMessage = await chatService.createUserMessage({
+        userId,
+        chatId,
+        content,
+        clientMessageId,
+      });
+      userMessageId = userMessage.id;
+
+      if (clientDisconnected) {
+        await cleanupFailedUserMessage();
+        return;
+      }
+
+      initSse(res);
+      streamStarted = true;
+
+      sendEvent(res, 'chat.meta', {
+        chatId,
+        userMessageId,
+      });
+
+      const generation = await ragService.streamAssistantReply({
+        userId,
+        chatId,
+        history,
+        indexedDocuments,
+        userMessage: content,
+        shouldAbort: () => clientDisconnected,
+        onToken: (token) => {
+          if (!clientDisconnected) {
+            sendEvent(res, 'assistant.delta', { text: token });
+          }
+        },
+      });
+
+      if (clientDisconnected) {
+        await cleanupFailedUserMessage();
+        return;
+      }
+
+      const completion = await chatService.saveAssistantMessageAndConsumeQuota({
+        userId,
+        chatId,
+        content: generation.answer,
+      });
+      assistantMessageSaved = true;
+
+      sendEvent(res, 'assistant.completed', {
+        assistantMessage: completion.message,
+        quota: completion.quota,
+      });
+
+      endSse(res);
     });
-
-    if (attachedDocuments.length > 0 && indexedDocuments.length === 0) {
-      throw new AppError(
-        409,
-        'DOCUMENTS_NOT_READY',
-        'Attached documents are still processing. Please wait until at least one document is ready.',
-      );
-    }
-
-    const userMessage = await chatService.createUserMessage({
-      userId,
-      chatId,
-      content,
-      clientMessageId,
-    });
-    userMessageId = userMessage.id;
-
-    if (clientDisconnected) {
-      return;
-    }
-
-    initSse(res);
-    streamStarted = true;
-
-    sendEvent(res, 'chat.meta', {
-      chatId,
-      userMessageId,
-    });
-
-    const generation = await ragService.streamAssistantReply({
-      userId,
-      chatId,
-      history,
-      indexedDocuments,
-      userMessage: content,
-      shouldAbort: () => clientDisconnected,
-      onToken: (token) => {
-        if (!clientDisconnected) {
-          sendEvent(res, 'assistant.delta', { text: token });
-        }
-      },
-    });
-
-    if (clientDisconnected) {
-      return;
-    }
-
-    const completion = await chatService.saveAssistantMessageAndConsumeQuota({
-      userId,
-      chatId,
-      content: generation.answer,
-    });
-
-    sendEvent(res, 'assistant.completed', {
-      assistantMessage: completion.message,
-      quota: completion.quota,
-    });
-
-    endSse(res);
   } catch (error) {
     if (error?.code === 'CLIENT_DISCONNECTED') {
+      await cleanupFailedUserMessage();
       return;
     }
 
     if (!streamStarted) {
+      await cleanupFailedUserMessage();
       return next(error);
     }
+
+    await cleanupFailedUserMessage();
 
     logger.warn('Streaming message failed', {
       chatId,

@@ -45,6 +45,17 @@ function createDocumentHash(buffer) {
   return crypto.createHash('sha256').update(buffer).digest('hex');
 }
 
+function sanitizeDocumentRecord(record) {
+  if (!record) {
+    return record;
+  }
+
+  return {
+    ...record,
+    file_url: '',
+  };
+}
+
 async function getOwnedDocument({ userId, documentId }) {
   const result = await db.query(
     `SELECT id,
@@ -70,7 +81,7 @@ async function getOwnedDocument({ userId, documentId }) {
     throw new AppError(404, 'DOCUMENT_NOT_FOUND', 'Document not found.');
   }
 
-  return result.rows[0];
+  return sanitizeDocumentRecord(result.rows[0]);
 }
 
 async function findUserDocumentByHash(userId, documentHash) {
@@ -94,7 +105,7 @@ async function findUserDocumentByHash(userId, documentHash) {
     [userId, documentHash],
   );
 
-  return result.rows[0] || null;
+  return sanitizeDocumentRecord(result.rows[0] || null);
 }
 
 async function isDocumentAttachedToChat(chatId, documentId) {
@@ -255,7 +266,7 @@ async function attachDocumentToChat({ userId, chatId, file }) {
       return updatedResult.rows[0];
     });
 
-    return result;
+    return sanitizeDocumentRecord(result);
   } catch (error) {
     try {
       await storageService.deleteDocumentObject(storagePath);
@@ -293,7 +304,7 @@ async function listChatDocuments({ userId, chatId }) {
     [chatId, userId],
   );
 
-  return result.rows;
+  return result.rows.map((row) => sanitizeDocumentRecord(row));
 }
 
 async function removeDocumentFromChat({ userId, chatId, documentId }) {

@@ -75,6 +75,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
 
           <div className="flex items-center gap-2 md:gap-3">
+            <div className="inline-flex items-center gap-2 rounded-md border border-[color:var(--line)] bg-[var(--panel-strong)] px-2 py-1 text-[11px] text-[var(--muted)] sm:hidden">
+              <span className={`h-2 w-2 rounded-full ${readyStatus.ai ? 'bg-neutral-900' : 'bg-neutral-400'}`} />
+              <span>{remainingQuota != null ? `${remainingQuota} left` : 'Loading'}</span>
+            </div>
+
             <div className="hidden items-center gap-2 rounded-md border border-[color:var(--line)] bg-[var(--panel-strong)] px-2.5 py-1.5 text-xs text-[var(--muted)] sm:inline-flex">
               <span className={`h-2 w-2 rounded-full ${readyStatus.ai ? 'bg-neutral-900' : 'bg-neutral-400'}`} />
               <span>{quotaLabel}</span>
@@ -165,7 +170,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                         target="_blank"
                         className="inline-flex w-full items-center justify-between rounded-md border border-[color:var(--line)] px-3 py-2 text-sm font-medium text-[var(--foreground)] transition-colors duration-150 hover:bg-[var(--panel-muted)]"
                       >
-                        Run locally for unlimited usage
+                        View project quick start
                         <ExternalLink size={14} />
                       </Link>
                     </div>
