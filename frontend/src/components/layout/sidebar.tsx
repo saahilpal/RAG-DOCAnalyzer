@@ -47,7 +47,7 @@ export function Sidebar({ onNavigate, onOpenSettings }: SidebarProps) {
 
   return (
     <>
-      <aside className="flex h-full w-[90vw] max-w-[360px] flex-col border-r border-[color:var(--line)] bg-[var(--sidebar)] px-4 py-5 text-[var(--sidebar-foreground)] lg:w-[304px] lg:max-w-none">
+      <aside className="flex h-full w-[90vw] max-w-[360px] flex-col border-r border-[color:var(--line)] bg-[var(--sidebar)] px-4 py-4 text-[var(--sidebar-foreground)] lg:w-[296px] lg:max-w-none">
         <div className="mb-5 flex items-center justify-between px-1">
           <LogoMark
             href="/app"
@@ -56,7 +56,7 @@ export function Sidebar({ onNavigate, onOpenSettings }: SidebarProps) {
         </div>
 
         <Button
-          className="mb-5 h-11 w-full justify-start rounded-xl border-[color:var(--sidebar-line)] bg-[var(--sidebar-elevated)] text-[var(--sidebar-foreground)] hover:bg-[var(--sidebar-hover)]"
+          className="mb-4 h-10 w-full justify-start rounded-[14px] border-[color:var(--sidebar-line)] bg-[rgba(255,255,255,0.04)] text-[var(--sidebar-foreground)] shadow-none hover:bg-[var(--sidebar-hover)]"
           onClick={() => {
             void handleCreateChat();
           }}
@@ -70,18 +70,18 @@ export function Sidebar({ onNavigate, onOpenSettings }: SidebarProps) {
           <span>{chats.length}</span>
         </div>
 
-        <div className="flex-1 space-y-1.5 overflow-y-auto pr-1">
+        <div className="flex-1 space-y-1 overflow-y-auto pr-1">
           {loadingChats && chats.length === 0 ? (
             <div className="space-y-2">
               {[0, 1, 2, 3].map((index) => (
                 <div
                   key={index}
-                  className="h-16 animate-pulse rounded-2xl border border-[color:var(--sidebar-line)] bg-[var(--sidebar-elevated)]"
+                  className="h-14 animate-pulse rounded-[14px] bg-[rgba(255,255,255,0.04)]"
                 />
               ))}
             </div>
           ) : chats.length === 0 ? (
-            <div className="rounded-2xl border border-[color:var(--sidebar-line)] bg-[var(--sidebar-elevated)] px-4 py-6 text-center text-sm text-[var(--sidebar-muted)]">
+            <div className="rounded-[14px] bg-[rgba(255,255,255,0.04)] px-4 py-5 text-center text-sm text-[var(--sidebar-muted)]">
               Start a new chat to begin.
             </div>
           ) : (
@@ -92,9 +92,9 @@ export function Sidebar({ onNavigate, onOpenSettings }: SidebarProps) {
                 <div
                   key={chat.id}
                   className={cn(
-                    'group rounded-2xl border px-3 py-3 transition-colors duration-200',
+                    'group rounded-[14px] px-2.5 py-2.5 transition-colors duration-200',
                     isActive
-                      ? 'border-[color:var(--sidebar-line-strong)] bg-[var(--sidebar-elevated)] shadow-[0_10px_24px_rgba(0,0,0,0.12)]'
+                      ? 'bg-[rgba(255,255,255,0.07)]'
                       : 'border-transparent bg-transparent hover:bg-[var(--sidebar-hover)]',
                   )}
                 >
@@ -169,9 +169,9 @@ export function Sidebar({ onNavigate, onOpenSettings }: SidebarProps) {
               onOpenSettings?.();
               onNavigate?.();
             }}
-            className="flex w-full items-center gap-3 rounded-2xl border border-[color:var(--sidebar-line)] bg-[var(--sidebar-elevated)] px-3 py-3 text-left transition-colors duration-200 hover:bg-[var(--sidebar-hover)]"
+            className="flex w-full items-center gap-3 rounded-[14px] bg-[rgba(255,255,255,0.04)] px-3 py-2.5 text-left transition-colors duration-200 hover:bg-[var(--sidebar-hover)]"
           >
-            <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-[color:var(--sidebar-line)] bg-[var(--sidebar)] text-xs font-semibold text-[var(--sidebar-foreground)]">
+            <span className="inline-flex h-8 w-8 items-center justify-center rounded-[12px] border border-[color:var(--sidebar-line)] bg-[var(--sidebar)] text-xs font-semibold text-[var(--sidebar-foreground)]">
               {initials}
             </span>
             <span className="min-w-0 flex-1">

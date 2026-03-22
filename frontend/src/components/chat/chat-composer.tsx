@@ -53,7 +53,7 @@ export function ChatComposer({
   return (
     <form
       ref={formRef}
-      className="rounded-[24px] border border-[color:var(--line)] bg-[rgba(255,255,255,0.86)] px-3 py-3 shadow-[var(--shadow-panel)] transition-[border-color,box-shadow,background-color] duration-200 focus-within:border-[color:var(--line-strong)] focus-within:bg-white"
+      className="rounded-[18px] border border-[rgba(24,24,27,0.08)] bg-[rgba(255,255,255,0.74)] px-2.5 py-2 shadow-[0_4px_14px_rgba(24,24,27,0.04)] transition-[border-color,box-shadow,background-color] duration-200 focus-within:border-[rgba(24,24,27,0.14)] focus-within:bg-white"
       onSubmit={(event) => {
         event.preventDefault();
         if (!value.trim() || disabled || loading) {
@@ -63,16 +63,16 @@ export function ChatComposer({
         onSubmit();
       }}
     >
-      <div className="flex items-end gap-3">
+      <div className="flex items-end gap-2">
         <Button
           type="button"
           variant="ghost"
           size="icon"
           disabled={attachDisabled || countedAttachments >= maxAttachments}
           onClick={() => fileInputRef.current?.click()}
-          className="h-10 w-10 shrink-0 rounded-xl border border-[color:var(--line)] bg-[var(--panel)] text-[var(--muted)] hover:bg-[var(--panel-muted)] hover:text-[var(--foreground)]"
+          className="h-9 w-9 shrink-0 rounded-[14px] border border-[rgba(24,24,27,0.08)] bg-[rgba(243,241,235,0.82)] text-[var(--muted)] hover:bg-[var(--panel-muted)] hover:text-[var(--foreground)]"
         >
-          <Paperclip size={16} />
+          <Paperclip size={15} />
         </Button>
 
         <textarea
@@ -94,7 +94,7 @@ export function ChatComposer({
           }}
           placeholder={placeholder}
           className={cn(
-            'max-h-44 min-h-[44px] flex-1 resize-none bg-transparent py-1.5 text-sm leading-6 text-[var(--foreground)] outline-none placeholder:text-[var(--muted)]',
+            'max-h-40 min-h-[38px] flex-1 resize-none bg-transparent py-1 text-sm leading-6 text-[var(--foreground)] outline-none placeholder:text-[var(--muted)]',
             disabled && 'cursor-not-allowed opacity-60',
           )}
         />
@@ -103,9 +103,9 @@ export function ChatComposer({
           type="submit"
           size="icon"
           disabled={disabled || loading || !value.trim()}
-          className="h-10 w-10 shrink-0 rounded-xl"
+          className="h-9 w-9 shrink-0 rounded-[14px] shadow-none"
         >
-          {loading ? <Loader2 size={16} className="animate-spin" /> : <SendHorizontal size={16} />}
+          {loading ? <Loader2 size={15} className="animate-spin" /> : <SendHorizontal size={15} />}
         </Button>
       </div>
 

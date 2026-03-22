@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Lock, RotateCcw } from 'lucide-react';
 import { ChatBubble } from '@/components/chat/chat-bubble';
 import { ChatComposer } from '@/components/chat/chat-composer';
@@ -123,80 +123,99 @@ export default function DashboardChatPage() {
         : 'Upload a document to begin';
   const composerDisabled = quotaReached || !hasReadyDocument;
   const attachDisabled = quotaReached || activeAttachments.length >= 1;
+  const handleRemoveAttachment = useCallback(
+    (documentId: string) => {
+      void removeAttachment(documentId);
+    },
+    [removeAttachment],
+  );
+
+  const attachmentTimeline = useMemo(
+    () =>
+      attachments.map((attachment) => (
+        <div key={attachment.id}>
+          <DocumentBubble attachment={attachment} onRemove={handleRemoveAttachment} />
+
+          {(attachment.status === 'uploading' || attachment.status === 'processing') && (
+            <div>
+              <ChatBubble
+                role="assistant"
+                content={PROCESSING_MESSAGE}
+                timestamp={attachment.attached_at || attachment.created_at}
+              />
+              <div className="py-1.5">
+                <TypingIndicator label="Processing document" />
+              </div>
+            </div>
+          )}
+
+          {attachment.status === 'indexed' ? (
+            <ChatBubble
+              role="assistant"
+              content={READY_MESSAGE}
+              timestamp={attachment.indexed_at || attachment.attached_at || attachment.created_at}
+            />
+          ) : null}
+
+          {attachment.status === 'failed' ? (
+            <ChatBubble
+              role="assistant"
+              content={FAILED_MESSAGE}
+              timestamp={attachment.attached_at || attachment.created_at}
+            />
+          ) : null}
+        </div>
+      )),
+    [attachments, handleRemoveAttachment],
+  );
+
+  const messageTimeline = useMemo(
+    () =>
+      serverMessages.map((message) => (
+        <ChatBubble
+          key={message.id}
+          role={message.role}
+          content={message.content}
+          timestamp={message.created_at}
+        />
+      )),
+    [serverMessages],
+  );
+
+  const streamingNode = useMemo(() => {
+    if (!streamingMessage) {
+      return null;
+    }
+
+    if (streamingMessage.content) {
+      return <ChatBubble role="assistant" content={streamingMessage.content} streaming />;
+    }
+
+    return (
+      <div className="py-2">
+        <TypingIndicator label={isRetrying ? 'Retrying' : 'Thinking'} />
+      </div>
+    );
+  }, [isRetrying, streamingMessage]);
 
   return (
     <PageTransition>
       <div className="relative flex h-full min-h-0 flex-col bg-[linear-gradient(180deg,rgba(255,255,255,0.18),transparent_24%)]">
-        <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto px-4 pb-40 pt-5 sm:px-6 lg:px-8">
+        <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto px-4 pb-36 pt-4 sm:px-6 lg:px-8">
           {loadingThread ? (
             <div className="mx-auto w-full max-w-[760px] space-y-3 pt-6">
               {[0, 1, 2].map((index) => (
                 <div
                   key={index}
-                  className="h-16 w-full animate-pulse rounded-2xl border border-[color:var(--line)] bg-[var(--panel-muted)]"
+                  className="h-14 w-full animate-pulse rounded-[18px] bg-[rgba(255,255,255,0.48)]"
                 />
               ))}
             </div>
           ) : hasMessages ? (
-            <div className="mx-auto flex w-full max-w-[760px] flex-col gap-1.5">
-              {attachments.map((attachment) => (
-                <div key={attachment.id}>
-                  <DocumentBubble
-                    attachment={attachment}
-                    onRemove={(documentId) => {
-                      void removeAttachment(documentId);
-                    }}
-                  />
-
-                  {(attachment.status === 'uploading' || attachment.status === 'processing') && (
-                    <div>
-                      <ChatBubble
-                        role="assistant"
-                        content={PROCESSING_MESSAGE}
-                        timestamp={attachment.attached_at || attachment.created_at}
-                      />
-                      <div className="py-2">
-                        <TypingIndicator label="Processing document" />
-                      </div>
-                    </div>
-                  )}
-
-                  {attachment.status === 'indexed' ? (
-                    <ChatBubble
-                      role="assistant"
-                      content={READY_MESSAGE}
-                      timestamp={attachment.indexed_at || attachment.attached_at || attachment.created_at}
-                    />
-                  ) : null}
-
-                  {attachment.status === 'failed' ? (
-                    <ChatBubble
-                      role="assistant"
-                      content={FAILED_MESSAGE}
-                      timestamp={attachment.attached_at || attachment.created_at}
-                    />
-                  ) : null}
-                </div>
-              ))}
-
-              {serverMessages.map((message) => (
-                <ChatBubble
-                  key={message.id}
-                  role={message.role}
-                  content={message.content}
-                  timestamp={message.created_at}
-                />
-              ))}
-
-              {streamingMessage ? (
-                streamingMessage.content ? (
-                  <ChatBubble role="assistant" content={streamingMessage.content} streaming />
-                ) : (
-                  <div className="py-4">
-                    <TypingIndicator label={isRetrying ? 'Retrying' : 'Thinking'} />
-                  </div>
-                )
-              ) : null}
+            <div className="mx-auto flex w-full max-w-[760px] flex-col gap-0.5">
+              {attachmentTimeline}
+              {messageTimeline}
+              {streamingNode}
             </div>
           ) : (
             <div className="mx-auto flex h-full w-full max-w-[760px] flex-col items-center justify-center px-3 py-10 text-center">
@@ -245,17 +264,17 @@ export default function DashboardChatPage() {
           )}
         </div>
 
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 border-t border-[color:var(--line)] bg-[rgba(247,244,238,0.92)] px-4 py-3 backdrop-blur-xl sm:px-6 lg:px-8">
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 border-t border-[rgba(24,24,27,0.08)] bg-[rgba(247,244,238,0.84)] px-4 py-2.5 backdrop-blur-xl sm:px-6 lg:px-8">
           <div className="pointer-events-auto mx-auto w-full max-w-[760px]">
             {statusLabel ? (
-              <div className="mb-2 inline-flex items-center gap-2 rounded-xl border border-[color:var(--line)] bg-[var(--panel-strong)] px-3 py-1.5 text-xs text-[var(--muted)] shadow-[var(--shadow-panel)]">
+              <div className="mb-1.5 inline-flex items-center gap-2 rounded-[14px] bg-[rgba(255,255,255,0.66)] px-2.5 py-1 text-xs text-[var(--muted)]">
                 <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--foreground)]" />
                 {statusLabel}
               </div>
             ) : null}
 
             {composerError ? (
-              <div className="mb-2 flex flex-col gap-3 rounded-2xl border border-[rgba(38,38,38,0.18)] bg-[rgba(255,255,255,0.72)] px-4 py-3 text-xs text-[var(--foreground)] shadow-[var(--shadow-panel)] sm:flex-row sm:items-center sm:justify-between">
+              <div className="mb-1.5 flex flex-col gap-2 rounded-[16px] bg-[rgba(255,255,255,0.66)] px-3 py-2.5 text-xs text-[var(--foreground)] sm:flex-row sm:items-center sm:justify-between">
                 <span>{composerError}</span>
                 <div className="flex items-center gap-2">
                   {canRetryLastMessage ? (
@@ -264,7 +283,7 @@ export default function DashboardChatPage() {
                       onClick={() => {
                         void retryLastMessage();
                       }}
-                      className="inline-flex items-center gap-1 rounded-xl border border-[color:var(--line)] bg-[var(--panel-strong)] px-2.5 py-1.5 font-medium text-[var(--foreground)] transition-colors duration-200 hover:bg-[var(--panel-muted)]"
+                      className="inline-flex items-center gap-1 rounded-[12px] bg-[rgba(255,255,255,0.8)] px-2 py-1 font-medium text-[var(--foreground)] transition-colors duration-200 hover:bg-[var(--panel-muted)]"
                     >
                       <RotateCcw size={12} />
                       Retry
@@ -273,7 +292,7 @@ export default function DashboardChatPage() {
                   <button
                     type="button"
                     onClick={clearComposerError}
-                    className="rounded-xl px-2.5 py-1.5 text-[var(--muted)] transition-colors duration-200 hover:bg-[var(--panel-muted)] hover:text-[var(--foreground)]"
+                    className="rounded-[12px] px-2 py-1 text-[var(--muted)] transition-colors duration-200 hover:bg-[var(--panel-muted)] hover:text-[var(--foreground)]"
                   >
                     Dismiss
                   </button>
@@ -282,7 +301,7 @@ export default function DashboardChatPage() {
             ) : null}
 
             {composerLockedMessage ? (
-              <div className="mb-2 inline-flex flex-wrap items-center gap-2 rounded-xl border border-[color:var(--line)] bg-[var(--panel-strong)] px-3 py-1.5 text-[11px] uppercase tracking-[0.12em] text-[var(--muted)] shadow-[var(--shadow-panel)]">
+              <div className="mb-1.5 inline-flex flex-wrap items-center gap-2 rounded-[14px] bg-[rgba(255,255,255,0.64)] px-2.5 py-1 text-[11px] uppercase tracking-[0.12em] text-[var(--muted)]">
                 <Lock size={12} />
                 {composerLockedMessage}
               </div>
