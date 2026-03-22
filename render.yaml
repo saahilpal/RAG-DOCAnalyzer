@@ -104,7 +104,7 @@ services:
       - key: GITHUB_REPOSITORY_URL
         sync: false
       - key: RUN_LOCALLY_GUIDE_URL
-        sync: false
+        value: https://github.com/saahilpal/RAG-DOCAnalyzer#quick-start
       - key: EMAIL_USER
         sync: false
       - key: EMAIL_PASS
