@@ -126,6 +126,12 @@ cp .env.example .env.local
 npm run db:schema
 ```
 
+For existing production databases, run the non-destructive auth migration instead of `db:schema`:
+
+```bash
+psql "$DATABASE_URL" -f database/migrations/20260323_social_auth_provider_migration.sql
+```
+
 ### 5) Run locally
 
 Backend:
