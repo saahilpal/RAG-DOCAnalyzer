@@ -21,16 +21,9 @@ const firebase = require('../src/config/firebase');
 const db = require('../src/database/client');
 
 function mockFirebaseVerifyIdToken(t, implementation) {
-  Object.defineProperty(firebase, 'auth', {
-    configurable: true,
-    value: () => ({
-      verifyIdToken: implementation,
-    }),
-  });
-
-  t.after(() => {
-    delete firebase.auth;
-  });
+  t.mock.method(firebase, 'getAuth', () => ({
+    verifyIdToken: implementation,
+  }));
 }
 
 test('google auth endpoint verifies token, sets cookie, and returns user payload', async (t) => {

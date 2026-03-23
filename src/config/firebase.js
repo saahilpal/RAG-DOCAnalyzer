@@ -1,26 +1,82 @@
 const admin = require('firebase-admin');
 
-const env = require('./env');
+let firebaseApp = null;
+let firebaseInitAttempted = false;
 
-const rawPrivateKey = process.env.FIREBASE_PRIVATE_KEY;
+function missingFirebaseEnvVars() {
+  const missing = [];
 
-console.log('Firebase Key Exists:', !!rawPrivateKey);
+  if (!String(process.env.FIREBASE_PROJECT_ID || '').trim()) {
+    missing.push('FIREBASE_PROJECT_ID');
+  }
 
-if (!rawPrivateKey) {
-  console.warn('Firebase not configured, skipping initialization');
-} else if (!admin.apps.length && env.nodeEnv !== 'test') {
+  if (!String(process.env.FIREBASE_CLIENT_EMAIL || '').trim()) {
+    missing.push('FIREBASE_CLIENT_EMAIL');
+  }
+
+  if (!String(process.env.FIREBASE_PRIVATE_KEY || '').trim()) {
+    missing.push('FIREBASE_PRIVATE_KEY');
+  }
+
+  return missing;
+}
+
+function initFirebase() {
+  if (firebaseApp) {
+    return firebaseApp;
+  }
+
+  if (admin.apps.length > 0) {
+    firebaseApp = admin.app();
+    return firebaseApp;
+  }
+
+  if (firebaseInitAttempted) {
+    return null;
+  }
+
+  firebaseInitAttempted = true;
+
+  console.log('Firebase Key Exists:', !!process.env.FIREBASE_PRIVATE_KEY);
+
+  const missingEnvVars = missingFirebaseEnvVars();
+  if (missingEnvVars.length > 0) {
+    console.warn(
+      `Firebase not configured. Skipping initialization. Missing: ${missingEnvVars.join(', ')}`,
+    );
+    return null;
+  }
+
   try {
-    admin.initializeApp({
+    firebaseApp = admin.initializeApp({
       credential: admin.credential.cert({
-        projectId: env.firebase.projectId,
-        clientEmail: env.firebase.clientEmail,
+        projectId: process.env.FIREBASE_PROJECT_ID,
+        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
         privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
       }),
     });
+
+    console.log('Firebase initialized:', process.env.FIREBASE_PROJECT_ID);
+    return firebaseApp;
   } catch (error) {
-    console.warn('Firebase not configured, skipping initialization');
-    console.error('Firebase initialization failed:', error?.message || error);
+    console.error('Firebase init failed:', error.message);
+    return null;
   }
 }
 
-module.exports = admin;
+function getAuth() {
+  if (!firebaseApp) {
+    initFirebase();
+  }
+
+  if (!firebaseApp) {
+    return null;
+  }
+
+  return admin.auth(firebaseApp);
+}
+
+module.exports = {
+  initFirebase,
+  getAuth,
+};

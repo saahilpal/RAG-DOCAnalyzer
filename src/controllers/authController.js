@@ -19,10 +19,16 @@ function getAuthCookieOptions() {
 
 async function google(req, res) {
   const idToken = String(req.body.idToken || '').trim();
+  const auth = firebase.getAuth();
   let decodedToken;
 
+  if (!auth) {
+    logger.error('Firebase auth is not initialized');
+    throw new AppError(500, 'FIREBASE_NOT_CONFIGURED', 'Firebase not configured');
+  }
+
   try {
-    decodedToken = await firebase.auth().verifyIdToken(idToken);
+    decodedToken = await auth.verifyIdToken(idToken);
   } catch (error) {
     logger.warn('Firebase token verification failed', {
       message: error?.message,

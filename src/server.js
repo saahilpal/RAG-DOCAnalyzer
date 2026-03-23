@@ -3,6 +3,9 @@ const env = require('./config/env');
 const logger = require('./config/logger');
 const { closePool } = require('./database/client');
 const { startDocumentWorker, stopDocumentWorker } = require('./services/documentWorkerService');
+const { initFirebase } = require('./config/firebase');
+
+initFirebase();
 
 const server = app.listen(env.port, env.host, () => {
   logger.info('Server started', {
