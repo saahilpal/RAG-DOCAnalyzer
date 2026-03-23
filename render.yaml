@@ -1,0 +1,103 @@
+services:
+  - type: web
+    name: document-analyzer-rag-backend
+    runtime: node
+    plan: free
+    rootDir: .
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/v1/health/live
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_OPTIONS
+        value: --dns-result-order=ipv4first
+      - key: HOST
+        value: 0.0.0.0
+      - key: PORT
+        value: 10000
+      - key: DATABASE_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      - key: SUPABASE_STORAGE_BUCKET
+        value: documents
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-2.5-flash
+      - key: GEMINI_EMBEDDING_MODEL
+        value: gemini-embedding-001
+      - key: EMBEDDING_DIMENSION
+        value: 384
+      - key: AI_TIMEOUT_MS
+        value: 12000
+      - key: RETRIEVAL_MODE
+        value: fts
+      - key: JWT_SECRET
+        sync: false
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: AUTH_COOKIE_NAME
+        value: doc_analyzer_token
+      - key: FIREBASE_PROJECT_ID
+        sync: false
+      - key: FIREBASE_CLIENT_EMAIL
+        sync: false
+      - key: FIREBASE_PRIVATE_KEY
+        sync: false
+      - key: CORS_ORIGIN
+        value: https://docanalyzer.app
+      - key: RATE_LIMIT_WINDOW_MS
+        value: 900000
+      - key: RATE_LIMIT_MAX
+        value: 120
+      - key: AUTH_RATE_LIMIT_MAX
+        value: 20
+      - key: UPLOAD_RATE_LIMIT_MAX
+        value: 20
+      - key: CHAT_RATE_LIMIT_MAX
+        value: 60
+      - key: MAX_REQUEST_BODY_SIZE
+        value: 1mb
+      - key: MAX_FILE_SIZE_MB
+        value: 10
+      - key: MAX_UPLOAD_FILE_SIZE_BYTES
+        value: 10485760
+      - key: MAX_PAGES_PER_DOC
+        value: 40
+      - key: MAX_CHUNKS_PER_DOC
+        value: 200
+      - key: MAX_CHAT_REQUESTS_PER_DAY
+        value: 20
+      - key: MAX_DOCS_PER_CHAT
+        value: 3
+      - key: CHAT_HISTORY_LIMIT
+        value: 8
+      - key: CHAT_MESSAGE_LIST_LIMIT
+        value: 200
+      - key: RAG_TOP_K
+        value: 6
+      - key: RAG_CANDIDATE_PAGE_SIZE
+        value: 24
+      - key: RAG_TOKEN_TO_CHAR_RATIO
+        value: 4
+      - key: RAG_CHUNK_TOKENS
+        value: 1000
+      - key: RAG_CHUNK_OVERLAP_TOKENS
+        value: 200
+      - key: ENABLE_DOCUMENT_WORKER
+        value: true
+      - key: WORKER_POLL_INTERVAL_MS
+        value: 1000
+      - key: DOCUMENT_PROCESSING_RETRY_AFTER_MS
+        value: 900000
+      - key: DOCUMENT_PROCESSING_MAX_RETRIES
+        value: 3
+      - key: GITHUB_REPOSITORY_URL
+        sync: false
+      - key: RUN_LOCALLY_GUIDE_URL
+        value: https://github.com/saahilpal/RAG-DOCAnalyzer#quick-start
