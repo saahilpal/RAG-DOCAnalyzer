@@ -25,9 +25,9 @@ const envSchema = z.object({
   JWT_EXPIRES_IN: z.string().default('7d'),
   AUTH_COOKIE_NAME: z.string().default('doc_analyzer_token'),
 
-  FIREBASE_PROJECT_ID: z.string().min(1),
-  FIREBASE_CLIENT_EMAIL: z.string().email(),
-  FIREBASE_PRIVATE_KEY: z.string().min(1),
+  FIREBASE_PROJECT_ID: z.string().optional(),
+  FIREBASE_CLIENT_EMAIL: z.string().optional(),
+  FIREBASE_PRIVATE_KEY: z.string().optional(),
 
   CORS_ORIGIN: z.string().min(1),
   RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(15 * 60 * 1000),
@@ -78,14 +78,6 @@ if (!parsed.success) {
 
 const env = parsed.data;
 
-const missingFirebaseEnvVars = ['FIREBASE_PROJECT_ID', 'FIREBASE_CLIENT_EMAIL', 'FIREBASE_PRIVATE_KEY'].filter(
-  (key) => !String(process.env[key] || '').trim(),
-);
-
-if (missingFirebaseEnvVars.length > 0) {
-  throw new Error(`Missing Firebase Admin configuration: ${missingFirebaseEnvVars.join(', ')}`);
-}
-
 if (env.RAG_CHUNK_OVERLAP_TOKENS >= env.RAG_CHUNK_TOKENS) {
   throw new Error(
     'Invalid environment configuration:\nRAG_CHUNK_OVERLAP_TOKENS must be smaller than RAG_CHUNK_TOKENS.',
@@ -119,9 +111,9 @@ module.exports = {
   authCookieName: env.AUTH_COOKIE_NAME,
 
   firebase: {
-    projectId: env.FIREBASE_PROJECT_ID,
-    clientEmail: env.FIREBASE_CLIENT_EMAIL,
-    privateKey: env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+    projectId: String(env.FIREBASE_PROJECT_ID || '').trim(),
+    clientEmail: String(env.FIREBASE_CLIENT_EMAIL || '').trim(),
+    privateKey: String(env.FIREBASE_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
   },
 
   corsOrigin: env.CORS_ORIGIN,
