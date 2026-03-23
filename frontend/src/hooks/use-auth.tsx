@@ -1,15 +1,15 @@
 'use client';
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { ApiError, getMe, signInWithGoogle as exchangeGoogleToken, signOut, type User } from '@/lib/api';
-import { signInWithGooglePopup, signOutFirebaseUser } from '@/lib/firebase';
+import { ApiError, getMe, signInWithSocial as exchangeSocialToken, signOut, type User } from '@/lib/api';
+import { signInWithProviderPopup, signOutFirebaseUser, type SocialProvider } from '@/lib/firebase';
 
 const AUTH_NOTICE_STORAGE_KEY = 'auth_notice';
 
 type AuthContextValue = {
   user: User | null;
   loading: boolean;
-  signInWithGoogle: () => Promise<void>;
+  signInWithProvider: (provider: SocialProvider) => Promise<void>;
   signOutUser: () => Promise<void>;
   refreshUser: () => Promise<void>;
 };
@@ -107,10 +107,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  const signInWithGoogle = useCallback(async () => {
+  const signInWithProvider = useCallback(async (provider: SocialProvider) => {
     try {
-      const idToken = await signInWithGooglePopup();
-      const data = await exchangeGoogleToken(idToken);
+      const idToken = await signInWithProviderPopup(provider);
+      const data = await exchangeSocialToken(idToken);
       setUser(data.user);
     } catch (error) {
       void signOutFirebaseUser().catch(() => {});
@@ -131,11 +131,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     () => ({
       user,
       loading,
-      signInWithGoogle,
+      signInWithProvider,
       signOutUser,
       refreshUser,
     }),
-    [loading, refreshUser, signInWithGoogle, signOutUser, user],
+    [loading, refreshUser, signInWithProvider, signOutUser, user],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

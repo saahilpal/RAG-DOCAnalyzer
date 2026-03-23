@@ -9,24 +9,21 @@ DROP TABLE IF EXISTS chunks CASCADE;
 DROP TABLE IF EXISTS documents CASCADE;
 DROP TABLE IF EXISTS chats CASCADE;
 DROP TABLE IF EXISTS daily_chat_usage CASCADE;
-DROP TABLE IF EXISTS otp_codes CASCADE;
 
 CREATE TABLE IF NOT EXISTS users (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   email TEXT UNIQUE NOT NULL,
   name TEXT,
-  google_id TEXT UNIQUE,
+  provider TEXT,
+  provider_id TEXT,
   avatar_url TEXT,
-  password_hash TEXT,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  email_verified_at TIMESTAMPTZ
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 ALTER TABLE users ADD COLUMN IF NOT EXISTS name TEXT;
-ALTER TABLE users ADD COLUMN IF NOT EXISTS google_id TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS provider TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS provider_id TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT;
-ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT;
-ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified_at TIMESTAMPTZ;
 
 CREATE TABLE IF NOT EXISTS chats (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -113,7 +110,10 @@ CREATE TABLE IF NOT EXISTS daily_chat_usage (
   PRIMARY KEY (user_id, usage_date)
 );
 
-CREATE INDEX IF NOT EXISTS idx_users_google_id ON users(google_id) WHERE google_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_provider_provider_id
+  ON users(provider, provider_id)
+  WHERE provider IS NOT NULL AND provider_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_users_provider ON users(provider) WHERE provider IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_chats_user_id ON chats(user_id);
 CREATE INDEX IF NOT EXISTS idx_chats_user_id_pinned_updated_at ON chats(user_id, pinned DESC, updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_chats_updated_at ON chats(updated_at DESC);

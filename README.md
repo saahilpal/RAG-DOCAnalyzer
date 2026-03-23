@@ -1,78 +1,92 @@
 # Document Analyzer RAG
 
-Chat with your documents using AI.
+Production-ready chat-first RAG application for document Q&A.
 
-Document Analyzer RAG is a chat-first document analysis product built around one flow:
+## Overview
 
-1. Sign in with Google
-2. Upload a PDF
-3. Let the system process it
-4. Ask focused questions about the document
+Document Analyzer lets users:
 
-The product stays grounded in uploaded document context. It avoids pretending to understand an entire file when retrieval is weak, and it pushes users toward specific follow-up questions instead of vague summaries.
+1. Sign in with Firebase social auth (Google or GitHub)
+2. Upload PDF documents
+3. Wait for indexing to complete
+4. Chat with grounded, document-based answers
+
+Frontend and backend are deployed separately:
+
+- Frontend: `https://docanalyzer.app`
+- Backend API: `https://api.docanalyzer.app`
 
 ## Core Features
 
-- Chat-first document workflow with upload, processing, and ready states
-- Strict document-grounded answers with vague-query and no-match guidance
-- Streaming assistant responses over SSE
-- Firebase Google Authentication on the frontend
-- Backend-owned JWT session cookie after Google sign-in
-- Persistent chat controls: create, rename, pin, and delete
-- Private Supabase Storage for uploaded files
-- Configurable retrieval with vector search and PostgreSQL FTS fallback
-- Daily chat quota and workspace diagnostics
+- Firebase social login (Google + GitHub)
+- Backend-owned JWT cookie sessions
+- Chat-first workflow with streaming responses (SSE)
+- Document upload, processing, indexing, and chat attachment flow
+- RAG pipeline with retrieval safeguards and graceful fallback behavior
+- Daily usage quota and infrastructure limits endpoint
+- Strict CORS policy and layered rate limiting
 
 ## Tech Stack
 
-- Frontend: Next.js, React, Tailwind CSS, Framer Motion, Firebase Web SDK
+- Frontend: Next.js, React, TypeScript, Tailwind CSS, Framer Motion, Firebase Web SDK
 - Backend: Node.js, Express, Firebase Admin SDK
 - Database: PostgreSQL (Supabase)
 - Storage: Supabase Storage
 - AI: Google Gemini
-- Deployment: Vercel for the frontend, Render for the backend
+- Deploy: Vercel (frontend), Render (backend)
 
-## Architecture
+## Repo Structure
 
-### System View
+```text
+.
+├── frontend/              # Next.js app
+├── src/                   # Express API
+├── database/schema.sql    # Database schema bootstrap
+├── render.yaml            # Render blueprint
+├── BACKEND_DOCS.md        # API contract documentation
+└── ARCHITECTURE.md        # System architecture and flows
+```
 
-<p align="center">
-  <img src="./docs/architecture.svg" alt="System architecture diagram" width="960" />
-</p>
+## Screenshots
 
-### RAG Flow
+Architecture visuals currently included:
 
-<p align="center">
-  <img src="./docs/rag-architecture.svg" alt="RAG retrieval and generation flow diagram" width="960" />
-</p>
+- System architecture: [`docs/architecture.svg`](./docs/architecture.svg)
+- RAG flow: [`docs/rag-architecture.svg`](./docs/rag-architecture.svg)
 
-Supporting docs:
+## Authentication Model (Final)
 
-- [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md)
-- [`docs/rag.md`](./docs/rag.md)
-- [`DEPLOYMENT_CHECKLIST.md`](./DEPLOYMENT_CHECKLIST.md)
+- Only Firebase social providers are supported:
+  - Google
+  - GitHub
+- Backend auth exchange endpoint remains:
+  - `POST /api/v1/auth/google`
+- Legacy email/password/OTP auth is removed from active flows.
 
-## Quick Start
+## Local Setup
 
-### 1. Install dependencies
+### 1) Install dependencies
 
 ```bash
 npm install
 cd frontend && npm install
 ```
 
-### 2. Create a Firebase project
+### 2) Configure Firebase
 
-1. Open the Firebase console.
-2. Create or select your project.
-3. Enable `Authentication -> Sign-in method -> Google`.
-4. Add a web app and copy the Firebase web config.
-5. Create a service account for the backend and copy:
+In Firebase Console:
+
+1. Create/select project
+2. Enable Auth providers:
+   - Google
+   - GitHub
+3. Create a Web App and copy client config values
+4. Create a Service Account for backend and copy:
    - project ID
    - client email
    - private key
 
-### 3. Configure environment variables
+### 3) Configure environment variables
 
 Backend:
 
@@ -87,7 +101,7 @@ cd frontend
 cp .env.example .env.local
 ```
 
-Minimum backend variables:
+### Backend required env vars
 
 - `DATABASE_URL`
 - `SUPABASE_URL`
@@ -98,7 +112,7 @@ Minimum backend variables:
 - `FIREBASE_CLIENT_EMAIL`
 - `FIREBASE_PRIVATE_KEY`
 
-Minimum frontend variables:
+### Frontend required env vars
 
 - `NEXT_PUBLIC_API_URL`
 - `NEXT_PUBLIC_FIREBASE_API_KEY`
@@ -106,15 +120,13 @@ Minimum frontend variables:
 - `NEXT_PUBLIC_FIREBASE_PROJECT_ID`
 - `NEXT_PUBLIC_FIREBASE_APP_ID`
 
-### 4. Initialize the database
-
-Use `npm run db:schema` only against a fresh or disposable database. The schema file recreates core tables.
+### 4) Initialize database (fresh/disposable DB only)
 
 ```bash
 npm run db:schema
 ```
 
-### 5. Start the app
+### 5) Run locally
 
 Backend:
 
@@ -129,43 +141,34 @@ cd frontend
 npm run dev
 ```
 
-### 6. Use the product locally
+## Production Deployment
 
-1. Sign in with Google.
-2. Open the workspace and upload a PDF.
-3. Wait until the assistant says the document is ready.
-4. Ask focused questions about the uploaded document.
+## Backend on Render
 
-## Scripts
+1. Connect repository to Render
+2. Use blueprint file: [`render.yaml`](./render.yaml)
+3. Set `sync: false` secrets in Render dashboard
+4. Confirm health endpoint:
+   - `GET https://api.docanalyzer.app/api/v1/health/live`
 
-From the repository root:
+## Frontend on Vercel
 
-```bash
-npm run dev
-npm run test
-npm run frontend:lint
-npm run frontend:test
-npm run frontend:build
-```
+1. Import `frontend/` as project root
+2. Set production env vars (`NEXT_PUBLIC_*`)
+3. Set `NEXT_PUBLIC_API_URL=https://api.docanalyzer.app`
+4. Deploy and validate auth + chat flows
 
-## Deployment
+## Security & Stability Checks
 
-Deployment references:
+- Strict CORS allowlist for `docanalyzer.app` domains
+- Global rate limit + route-specific auth/chat/upload limiters
+- Standard API response envelope:
+  - success: `{ ok: true, data: ... }`
+  - error: `{ ok: false, error: { code, message, details? } }`
+- Firebase Admin env validation at boot
+- No JSON service account file dependency in backend runtime
 
-- Backend blueprint: [`render.yaml`](./render.yaml)
-- Frontend config: [`frontend/vercel.json`](./frontend/vercel.json)
-- Checklist: [`DEPLOYMENT_CHECKLIST.md`](./DEPLOYMENT_CHECKLIST.md)
-
-Production notes:
-
-- Keep the Supabase `documents` bucket private.
-- Set `NODE_OPTIONS=--dns-result-order=ipv4first` on Render.
-- Use the Firebase Admin service account values on the backend.
-- Set the Firebase web app config as `NEXT_PUBLIC_FIREBASE_*` variables on the frontend host.
-
-## Verification
-
-Automated checks:
+## Verification Commands
 
 ```bash
 npm test
@@ -174,17 +177,8 @@ npm run frontend:lint
 npm run frontend:build
 ```
 
-Recommended manual checks:
+## Additional Documentation
 
-1. Sign in with Google and confirm a user is created automatically.
-2. Refresh the app and confirm `/api/v1/auth/me` restores the session.
-3. Upload a PDF and confirm the chat shows processing, then ready.
-4. Ask a specific document question and confirm the answer streams.
-5. Try a vague prompt such as `what is this` and confirm the app asks for a more specific question.
-
-## About
-
-Built by Sahil Pal.
-
-- GitHub: [`saahilpal`](https://github.com/saahilpal)
-- LinkedIn: [`sahiilpal`](https://www.linkedin.com/in/sahiilpal)
+- Backend contract: [`BACKEND_DOCS.md`](./BACKEND_DOCS.md)
+- System architecture: [`ARCHITECTURE.md`](./ARCHITECTURE.md)
+- Deployment checklist: [`DEPLOYMENT_CHECKLIST.md`](./DEPLOYMENT_CHECKLIST.md)

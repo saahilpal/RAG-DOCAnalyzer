@@ -5,7 +5,6 @@ const { closePool } = require('./database/client');
 const { startDocumentWorker, stopDocumentWorker } = require('./services/documentWorkerService');
 
 const server = app.listen(env.port, env.host, () => {
-  console.log('Firebase initialized:', process.env.FIREBASE_PROJECT_ID);
   logger.info('Server started', {
     host: env.host,
     port: env.port,

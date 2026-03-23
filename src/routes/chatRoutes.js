@@ -27,11 +27,12 @@ const upload = multer({
   },
 });
 
-router.get('/', requireAuth, validateQuery(listChatsQuerySchema), asyncHandler(controller.listChats));
-router.post('/', requireAuth, validateBody(createChatSchema), asyncHandler(controller.createChat));
-router.get('/:chatId', requireAuth, validateParams(chatIdParamsSchema), asyncHandler(controller.getChat));
+router.get('/', chatIpLimiter, requireAuth, validateQuery(listChatsQuerySchema), asyncHandler(controller.listChats));
+router.post('/', chatIpLimiter, requireAuth, validateBody(createChatSchema), asyncHandler(controller.createChat));
+router.get('/:chatId', chatIpLimiter, requireAuth, validateParams(chatIdParamsSchema), asyncHandler(controller.getChat));
 router.patch(
   '/:chatId',
+  chatIpLimiter,
   requireAuth,
   validateParams(chatIdParamsSchema),
   validateBody(updateChatSchema),
@@ -39,12 +40,14 @@ router.patch(
 );
 router.delete(
   '/:chatId',
+  chatIpLimiter,
   requireAuth,
   validateParams(chatIdParamsSchema),
   asyncHandler(controller.deleteChat),
 );
 router.get(
   '/:chatId/messages',
+  chatIpLimiter,
   requireAuth,
   validateParams(chatIdParamsSchema),
   validateQuery(listMessagesQuerySchema),
@@ -60,6 +63,7 @@ router.post(
 );
 router.get(
   '/:chatId/documents',
+  chatIpLimiter,
   requireAuth,
   validateParams(chatIdParamsSchema),
   asyncHandler(controller.listDocuments),
@@ -75,6 +79,7 @@ router.post(
 );
 router.delete(
   '/:chatId/documents/:documentId',
+  chatIpLimiter,
   requireAuth,
   validateParams(chatDocumentParamsSchema),
   asyncHandler(controller.removeDocument),

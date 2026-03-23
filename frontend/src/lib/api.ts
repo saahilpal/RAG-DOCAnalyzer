@@ -81,8 +81,13 @@ export class ApiError extends Error {
   }
 }
 
-const RAW_API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
-const API_BASE_URL = RAW_API_URL.replace(/\/+$/, '');
+const DEFAULT_API_URL = process.env.NODE_ENV === 'production' ? 'https://api.docanalyzer.app' : 'http://localhost:4000';
+const configuredApiUrl = String(process.env.NEXT_PUBLIC_API_URL || DEFAULT_API_URL).trim();
+const normalizedApiUrl = configuredApiUrl.replace(/\/+$/, '');
+const API_BASE_URL =
+  process.env.NODE_ENV === 'production' && /(localhost|127\.0\.0\.1)/i.test(normalizedApiUrl)
+    ? 'https://api.docanalyzer.app'
+    : normalizedApiUrl;
 
 function isFormData(value: unknown): value is FormData {
   return typeof FormData !== 'undefined' && value instanceof FormData;
@@ -164,7 +169,7 @@ export function getMe() {
   return request<{ user: User }>('/api/v1/auth/me');
 }
 
-export function signInWithGoogle(idToken: string) {
+export function signInWithSocial(idToken: string) {
   return request<{ user: User; token: string }>('/api/v1/auth/google', {
     method: 'POST',
     body: JSON.stringify({ idToken }),

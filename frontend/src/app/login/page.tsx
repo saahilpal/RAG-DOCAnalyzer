@@ -45,7 +45,7 @@ export default function LoginPage() {
 
             <div className="mt-6 flex flex-wrap gap-2">
               <div className="rounded-full border border-[color:var(--line)] bg-white/80 px-3 py-1.5 text-sm text-[var(--muted)]">
-                Google sign-in
+                Google or GitHub sign-in
               </div>
               <div className="rounded-full border border-[color:var(--line)] bg-white/80 px-3 py-1.5 text-sm text-[var(--muted)]">
                 Chat-first workflow
@@ -62,7 +62,7 @@ export default function LoginPage() {
         </section>
 
         <section className="flex items-center justify-center px-6 pb-8 pt-0 sm:px-8 lg:px-12 lg:py-10">
-          <AuthCard mode="login" />
+          <AuthCard />
         </section>
       </div>
     </main>

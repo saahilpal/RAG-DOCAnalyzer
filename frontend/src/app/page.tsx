@@ -51,7 +51,7 @@ const howItWorks = [
   },
 ];
 
-const proofPoints = ['Grounded answers', 'Responsive workspace', 'Email-secured access'];
+const proofPoints = ['Grounded answers', 'Responsive workspace', 'Social sign-in'];
 
 export default function LandingPage() {
   return (
@@ -72,7 +72,7 @@ export default function LandingPage() {
             >
               Login
             </Link>
-            <Link href="/signup">
+            <Link href="/login">
               <Button>Try now</Button>
             </Link>
           </div>
@@ -93,7 +93,7 @@ export default function LandingPage() {
               </p>
 
               <div className="mt-7 flex flex-wrap items-center gap-3">
-                <Link href="/signup">
+                <Link href="/login">
                   <Button size="lg">
                     Try the workspace
                     <ArrowRight size={16} />

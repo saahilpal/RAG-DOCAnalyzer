@@ -18,6 +18,24 @@ function mapUser(row) {
   };
 }
 
+function normalizeProvider(provider) {
+  const rawProvider = String(provider || '').trim().toLowerCase();
+
+  if (!rawProvider) {
+    return 'unknown';
+  }
+
+  if (rawProvider === 'google.com' || rawProvider === 'google') {
+    return 'google';
+  }
+
+  if (rawProvider === 'github.com' || rawProvider === 'github') {
+    return 'github';
+  }
+
+  return rawProvider;
+}
+
 function signAuthToken(user) {
   return jwt.sign(
     {
@@ -48,7 +66,7 @@ async function getUserById(userId) {
 async function getUserByEmail(email, client = db) {
   const normalizedEmail = normalizeEmail(email);
   const result = await client.query(
-    `SELECT id, email, name, google_id, avatar_url, created_at
+    `SELECT id, email, name, provider, provider_id, avatar_url, created_at
      FROM users
      WHERE email = $1
      LIMIT 1`,
@@ -58,11 +76,13 @@ async function getUserByEmail(email, client = db) {
   return result.rows[0] || null;
 }
 
-async function upsertGoogleUser({ email, name, picture, googleId }) {
+async function upsertSocialUser({ email, name, picture, provider, providerId }) {
   const normalizedEmail = normalizeEmail(email);
+  const normalizedProvider = normalizeProvider(provider);
+  const normalizedProviderId = String(providerId || '').trim() || null;
 
   if (!normalizedEmail) {
-    throw new AppError(400, 'AUTH_EMAIL_REQUIRED', 'Google account did not provide a usable email address.');
+    throw new AppError(400, 'AUTH_EMAIL_REQUIRED', 'Social account did not provide a usable email address.');
   }
 
   return db.withTransaction(async (client) => {
@@ -72,16 +92,16 @@ async function upsertGoogleUser({ email, name, picture, googleId }) {
       const updateResult = await client.query(
         `UPDATE users
          SET name = $2,
-             google_id = $3,
-             avatar_url = $4,
-             email_verified_at = COALESCE(email_verified_at, NOW()),
-             password_hash = COALESCE(password_hash, '__firebase_google_auth__')
+             provider = $3,
+             provider_id = $4,
+             avatar_url = $5
          WHERE id = $1
          RETURNING id, email, name, avatar_url, created_at`,
         [
           existing.id,
           name || existing.name || null,
-          googleId || existing.google_id || null,
+          normalizedProvider || existing.provider || null,
+          normalizedProviderId || existing.provider_id || null,
           picture || existing.avatar_url || null,
         ],
       );
@@ -90,10 +110,10 @@ async function upsertGoogleUser({ email, name, picture, googleId }) {
     }
 
     const insertResult = await client.query(
-      `INSERT INTO users (email, name, google_id, avatar_url, password_hash, email_verified_at)
-       VALUES ($1, $2, $3, $4, $5, NOW())
+      `INSERT INTO users (email, name, provider, provider_id, avatar_url)
+       VALUES ($1, $2, $3, $4, $5)
        RETURNING id, email, name, avatar_url, created_at`,
-      [normalizedEmail, name || null, googleId || null, picture || null, '__firebase_google_auth__'],
+      [normalizedEmail, name || null, normalizedProvider, normalizedProviderId, picture || null],
     );
 
     return mapUser(insertResult.rows[0]);
@@ -104,5 +124,5 @@ module.exports = {
   signAuthToken,
   getUserById,
   getUserByEmail,
-  upsertGoogleUser,
+  upsertSocialUser,
 };

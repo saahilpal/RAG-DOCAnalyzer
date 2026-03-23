@@ -2,6 +2,7 @@
 
 import { initializeApp, getApp, getApps, type FirebaseApp } from 'firebase/app';
 import {
+  GithubAuthProvider,
   GoogleAuthProvider,
   getAuth,
   inMemoryPersistence,
@@ -12,6 +13,7 @@ import {
 import { ApiError } from '@/lib/api';
 
 let persistenceReady = false;
+export type SocialProvider = 'google' | 'github';
 
 function getFirebaseConfig() {
   return {
@@ -56,25 +58,37 @@ async function getConfiguredAuth() {
   return auth;
 }
 
-function normalizeGoogleError(error: unknown) {
+function getProviderLabel(provider: SocialProvider) {
+  return provider === 'github' ? 'GitHub' : 'Google';
+}
+
+function normalizeSocialError(provider: SocialProvider, error: unknown) {
   const code = typeof error === 'object' && error !== null && 'code' in error ? String(error.code) : '';
+  const providerLabel = getProviderLabel(provider);
 
   if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
-    return new ApiError('Google sign-in was cancelled.', {
+    return new ApiError(`${providerLabel} sign-in was cancelled.`, {
       status: 400,
-      code: 'GOOGLE_AUTH_CANCELLED',
+      code: 'SOCIAL_AUTH_CANCELLED',
     });
   }
 
   if (code === 'auth/popup-blocked') {
     return new ApiError('Popup was blocked. Allow popups and try again.', {
       status: 400,
-      code: 'GOOGLE_AUTH_POPUP_BLOCKED',
+      code: 'SOCIAL_AUTH_POPUP_BLOCKED',
+    });
+  }
+
+  if (code === 'auth/account-exists-with-different-credential') {
+    return new ApiError('This email is already linked to a different sign-in provider.', {
+      status: 409,
+      code: 'SOCIAL_AUTH_PROVIDER_MISMATCH',
     });
   }
 
   if (code === 'auth/network-request-failed') {
-    return new ApiError('Network error while contacting Google. Please try again.', {
+    return new ApiError(`Network error while contacting ${providerLabel}. Please try again.`, {
       status: 0,
       code: 'NETWORK_ERROR',
     });
@@ -82,22 +96,33 @@ function normalizeGoogleError(error: unknown) {
 
   return error instanceof Error
     ? error
-    : new ApiError('Google sign-in failed.', {
+    : new ApiError(`${providerLabel} sign-in failed.`, {
         status: 500,
-        code: 'GOOGLE_AUTH_FAILED',
+        code: 'SOCIAL_AUTH_FAILED',
       });
 }
 
-export async function signInWithGooglePopup() {
+function buildProvider(provider: SocialProvider) {
+  if (provider === 'github') {
+    const githubProvider = new GithubAuthProvider();
+    githubProvider.setCustomParameters({ allow_signup: 'true' });
+    return githubProvider;
+  }
+
+  const googleProvider = new GoogleAuthProvider();
+  googleProvider.setCustomParameters({ prompt: 'select_account' });
+  return googleProvider;
+}
+
+export async function signInWithProviderPopup(provider: SocialProvider) {
   const auth = await getConfiguredAuth();
-  const provider = new GoogleAuthProvider();
-  provider.setCustomParameters({ prompt: 'select_account' });
+  const authProvider = buildProvider(provider);
 
   try {
-    const result = await signInWithPopup(auth, provider);
+    const result = await signInWithPopup(auth, authProvider);
     return result.user.getIdToken();
   } catch (error) {
-    throw normalizeGoogleError(error);
+    throw normalizeSocialError(provider, error);
   }
 }
 

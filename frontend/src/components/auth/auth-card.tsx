@@ -1,18 +1,15 @@
 'use client';
 
-import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { LogoMark } from '@/components/common/logo-mark';
 import { useAuth } from '@/hooks/use-auth';
 import { ApiError } from '@/lib/api';
 import { transitions } from '@/lib/motion';
-
-type AuthMode = 'login' | 'signup' | 'reset';
+import type { SocialProvider } from '@/lib/firebase';
 
 const AUTH_NOTICE_STORAGE_KEY = 'auth_notice';
 
@@ -39,6 +36,17 @@ function GoogleMark() {
   );
 }
 
+function GithubMark() {
+  return (
+    <svg aria-hidden="true" className="h-4 w-4 text-[var(--foreground)]" viewBox="0 0 24 24">
+      <path
+        fill="currentColor"
+        d="M12 .5a11.5 11.5 0 0 0-3.64 22.42c.58.11.79-.25.79-.56 0-.28-.01-1.03-.02-2.02-3.2.7-3.88-1.54-3.88-1.54-.52-1.34-1.28-1.7-1.28-1.7-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.2 1.77 1.2 1.03 1.78 2.71 1.27 3.37.97.1-.75.4-1.27.73-1.56-2.55-.29-5.24-1.29-5.24-5.73 0-1.27.45-2.3 1.2-3.1-.12-.29-.52-1.46.11-3.05 0 0 .98-.32 3.2 1.18a11.1 11.1 0 0 1 5.82 0c2.22-1.5 3.2-1.18 3.2-1.18.63 1.59.23 2.76.11 3.05.75.8 1.2 1.83 1.2 3.1 0 4.45-2.7 5.43-5.26 5.72.42.36.78 1.07.78 2.16 0 1.56-.02 2.82-.02 3.2 0 .31.21.68.8.56A11.5 11.5 0 0 0 12 .5Z"
+      />
+    </svg>
+  );
+}
+
 function getFriendlyAuthMessage(error: unknown, fallback: string) {
   if (!(error instanceof ApiError)) {
     return error instanceof Error ? error.message : fallback;
@@ -52,62 +60,26 @@ function getFriendlyAuthMessage(error: unknown, fallback: string) {
     case 'AUTH_INVALID_TOKEN':
       return 'Your session expired. Please sign in again.';
     case 'AUTH_EMAIL_REQUIRED':
-      return 'Your Google account did not return an email address.';
-    case 'GOOGLE_AUTH_CANCELLED':
-      return 'Google sign-in was cancelled before completion.';
-    case 'GOOGLE_AUTH_POPUP_BLOCKED':
+      return 'Your social account did not return an email address.';
+    case 'SOCIAL_AUTH_CANCELLED':
+      return 'Sign-in was cancelled before completion.';
+    case 'SOCIAL_AUTH_POPUP_BLOCKED':
       return 'Popup was blocked. Allow popups and try again.';
+    case 'SOCIAL_AUTH_PROVIDER_MISMATCH':
+      return 'This email is linked to a different provider. Use the original provider to sign in.';
     case 'FIREBASE_CONFIG_MISSING':
-      return 'Google sign-in is not configured for this environment.';
+      return 'Firebase sign-in is not configured for this environment.';
     default:
       return error.message || fallback;
   }
 }
 
-function getModeCopy(mode: AuthMode) {
-  if (mode === 'signup') {
-    return {
-      eyebrow: 'Create account',
-      title: 'Continue with Google',
-      description: 'Use your Google account to create a workspace and start chatting with documents immediately.',
-      buttonLabel: 'Continue with Google',
-      footerLabel: 'Already have access?',
-      footerHref: '/login',
-      footerText: 'Sign in',
-    };
-  }
-
-  if (mode === 'reset') {
-    return {
-      eyebrow: 'Account access',
-      title: 'Passwords are no longer used',
-      description: 'Sign in with the Google account attached to your workspace. Session management stays on DocAnalyzer.',
-      buttonLabel: 'Continue with Google',
-      footerLabel: 'Need the main sign-in screen?',
-      footerHref: '/login',
-      footerText: 'Back to login',
-    };
-  }
-
-  return {
-    eyebrow: 'Secure workspace',
-    title: 'Continue with Google',
-    description: 'Use your Google account to restore your workspace and continue document conversations.',
-    buttonLabel: 'Continue with Google',
-    footerLabel: 'New to DocAnalyzer?',
-    footerHref: '/signup',
-    footerText: 'Create access',
-  };
-}
-
-export function AuthCard({ mode = 'login' }: { mode?: AuthMode }) {
+export function AuthCard() {
   const router = useRouter();
-  const { signInWithGoogle } = useAuth();
-  const [loading, setLoading] = useState(false);
+  const { signInWithProvider } = useAuth();
+  const [loadingProvider, setLoadingProvider] = useState<SocialProvider | null>(null);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
-
-  const copy = getModeCopy(mode);
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -123,20 +95,22 @@ export function AuthCard({ mode = 'login' }: { mode?: AuthMode }) {
     window.sessionStorage.removeItem(AUTH_NOTICE_STORAGE_KEY);
   }, []);
 
-  async function handleGoogleSignIn() {
-    setLoading(true);
+  async function handleSocialSignIn(provider: SocialProvider) {
+    setLoadingProvider(provider);
     setError('');
     setNotice('');
 
     try {
-      await signInWithGoogle();
+      await signInWithProvider(provider);
       router.push('/app');
     } catch (submitError) {
       setError(getFriendlyAuthMessage(submitError, 'We could not sign you in right now. Please try again.'));
     } finally {
-      setLoading(false);
+      setLoadingProvider(null);
     }
   }
+
+  const isLoading = loadingProvider !== null;
 
   return (
     <motion.div
@@ -148,27 +122,45 @@ export function AuthCard({ mode = 'login' }: { mode?: AuthMode }) {
       <Card className="rounded-[28px] border border-[color:var(--line)] bg-[var(--panel-strong)] p-8 shadow-[var(--shadow-soft)]">
         <LogoMark className="mb-8" href="/" />
 
-        <p className="text-[11px] uppercase tracking-[0.18em] text-[var(--muted)]">{copy.eyebrow}</p>
+        <p className="text-[11px] uppercase tracking-[0.18em] text-[var(--muted)]">Secure workspace</p>
         <h1 className="font-display mt-4 text-3xl font-semibold tracking-tight text-[var(--foreground)]">
-          {copy.title}
+          Continue with social sign-in
         </h1>
-        <p className="mt-3 text-sm leading-7 text-[var(--muted)]">{copy.description}</p>
+        <p className="mt-3 text-sm leading-7 text-[var(--muted)]">
+          Sign in with Google or GitHub. DocAnalyzer keeps the existing backend session cookie flow.
+        </p>
 
-        <div className="mt-8 space-y-4">
+        <div className="mt-8 space-y-3">
           <Button
             type="button"
             variant="secondary"
             size="lg"
-            className="w-full justify-center border-black/10 bg-white text-[var(--foreground)] hover:bg-neutral-100"
-            onClick={handleGoogleSignIn}
-            disabled={loading}
+            className="w-full justify-center border-black/10 bg-white text-[var(--foreground)] shadow-[var(--shadow-panel)] hover:bg-neutral-100"
+            onClick={() => {
+              void handleSocialSignIn('google');
+            }}
+            disabled={isLoading}
           >
             <GoogleMark />
-            {loading ? 'Connecting...' : copy.buttonLabel}
+            {loadingProvider === 'google' ? 'Connecting...' : 'Continue with Google'}
           </Button>
 
-          <p className="text-xs leading-6 text-[var(--muted)]">
-            Google verifies identity. DocAnalyzer keeps the app session in the existing secure cookie flow.
+          <Button
+            type="button"
+            variant="secondary"
+            size="lg"
+            className="w-full justify-center border-black/10 bg-white text-[var(--foreground)] shadow-[var(--shadow-panel)] hover:bg-neutral-100"
+            onClick={() => {
+              void handleSocialSignIn('github');
+            }}
+            disabled={isLoading}
+          >
+            <GithubMark />
+            {loadingProvider === 'github' ? 'Connecting...' : 'Continue with GitHub'}
+          </Button>
+
+          <p className="pt-1 text-xs leading-6 text-[var(--muted)]">
+            Identity is verified by Firebase providers. API sessions remain managed by the backend cookie.
           </p>
 
           <AnimatePresence initial={false}>
@@ -199,14 +191,6 @@ export function AuthCard({ mode = 'login' }: { mode?: AuthMode }) {
               </motion.p>
             ) : null}
           </AnimatePresence>
-        </div>
-
-        <div className="mt-8 flex items-center justify-between border-t border-[color:var(--line)] pt-5 text-sm">
-          <span className="text-[var(--muted)]">{copy.footerLabel}</span>
-          <Link className="inline-flex items-center gap-1.5 text-[var(--foreground)] transition hover:opacity-70" href={copy.footerHref}>
-            <ArrowLeft className="h-3.5 w-3.5" />
-            {copy.footerText}
-          </Link>
         </div>
       </Card>
     </motion.div>

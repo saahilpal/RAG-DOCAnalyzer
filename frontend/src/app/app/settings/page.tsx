@@ -11,7 +11,7 @@ export default function SettingsPage() {
           Account controls are available from the workspace panel
         </h1>
         <p className="mt-3 text-sm leading-6 text-[var(--muted)]">
-          Open the top-right panel to review usage, switch Google accounts, access the project quick start, or sign out.
+          Open the top-right panel to review usage, switch social accounts, access the project quick start, or sign out.
         </p>
         <div className="mt-6 grid gap-3 text-left sm:grid-cols-3">
           <div className="rounded-2xl border border-[color:var(--line)] bg-[var(--panel-strong)] px-4 py-4">
@@ -20,7 +20,7 @@ export default function SettingsPage() {
           </div>
           <div className="rounded-2xl border border-[color:var(--line)] bg-[var(--panel-strong)] px-4 py-4">
             <p className="text-[11px] uppercase tracking-[0.14em] text-[var(--muted)]">Security</p>
-            <p className="mt-2 text-sm font-medium text-[var(--foreground)]">Google account sign-in only</p>
+            <p className="mt-2 text-sm font-medium text-[var(--foreground)]">Google and GitHub social sign-in</p>
           </div>
           <div className="rounded-2xl border border-[color:var(--line)] bg-[var(--panel-strong)] px-4 py-4">
             <p className="text-[11px] uppercase tracking-[0.14em] text-[var(--muted)]">Links</p>

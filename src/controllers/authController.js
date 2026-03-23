@@ -32,16 +32,18 @@ async function google(req, res) {
   }
 
   const email = String(decodedToken.email || '').trim().toLowerCase();
+  const provider = decodedToken?.firebase?.sign_in_provider || 'unknown';
 
   if (!email) {
-    throw new AppError(400, 'AUTH_EMAIL_REQUIRED', 'Google account did not provide a usable email address.');
+    throw new AppError(400, 'AUTH_EMAIL_REQUIRED', 'Social account did not provide a usable email address.');
   }
 
-  const user = await authService.upsertGoogleUser({
+  const user = await authService.upsertSocialUser({
     email,
     name: decodedToken.name || null,
     picture: decodedToken.picture || null,
-    googleId: decodedToken.uid || null,
+    provider,
+    providerId: decodedToken.uid || null,
   });
   const token = authService.signAuthToken(user);
 

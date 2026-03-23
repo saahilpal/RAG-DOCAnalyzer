@@ -170,7 +170,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                           router.push('/login');
                         }}
                       >
-                        Switch Google account
+                        Switch social account
                         <Settings2 size={14} />
                       </button>
                       <Link
