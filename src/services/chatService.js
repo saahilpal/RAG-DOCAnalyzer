@@ -12,6 +12,11 @@ function buildChatTitle(content) {
   return title.length > 60 ? `${title.slice(0, 57)}...` : title;
 }
 
+function getHistoryWindowLimit(limit) {
+  const numeric = Number(limit) || env.chatHistoryLimit;
+  return Math.max(8, Math.min(10, numeric));
+}
+
 async function createChat({ userId, title }) {
   const result = await db.query(
     `INSERT INTO chats (user_id, title, pinned)
@@ -144,6 +149,7 @@ async function listChatMessages({ userId, chatId, limit = env.chatMessageListLim
 
 async function getRecentChatMessages({ userId, chatId, limit = env.chatHistoryLimit }) {
   await getOwnedChat({ userId, chatId });
+  const historyLimit = getHistoryWindowLimit(limit);
 
   const result = await db.query(
     `SELECT role, content, created_at
@@ -155,7 +161,7 @@ async function getRecentChatMessages({ userId, chatId, limit = env.chatHistoryLi
        LIMIT $2
      ) recent_messages
      ORDER BY created_at ASC`,
-    [chatId, limit],
+    [chatId, historyLimit],
   );
 
   return result.rows;

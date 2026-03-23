@@ -7,8 +7,6 @@ const geminiService = require('./geminiService');
 const NO_DOCUMENT_GUIDANCE = 'Please upload a document to begin.';
 const VAGUE_QUERY_GUIDANCE =
   "I'm here to help with your document. Try asking about a specific topic or concept from it.";
-const NO_RELEVANT_CONTEXT_GUIDANCE =
-  "I couldn't find relevant information in your document. Try asking something more specific.";
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
@@ -39,7 +37,7 @@ function formatHistory(history) {
 
 function formatContext(chunks) {
   if (!Array.isArray(chunks) || chunks.length === 0) {
-    return 'No relevant document context was retrieved for this question.';
+    return '';
   }
 
   const charLimit = getPromptChunkCharLimit();
@@ -60,47 +58,28 @@ function normalizeUserMessage(userMessage) {
     .trim();
 }
 
-function isVagueDocumentQuery(userMessage) {
-  const normalized = normalizeUserMessage(userMessage);
-
-  if (!normalized) {
-    return false;
-  }
-
-  const vaguePatterns = [
-    /^(what is this|what s this)$/i,
-    /^explain this$/i,
-    /^tell me about (it|this)$/i,
-    /^what does this mean$/i,
-    /\bsummar(?:ize|ise)\b.*\b(entire|whole|full|complete)\b.*\b(document|file|pdf|report)\b/,
-    /\b(explain|describe|cover|review)\b.*\b(everything|all of it|the whole thing)\b/,
-    /\b(overview|summary)\s+of\s+(this\s+|the\s+)?(document|file|pdf|report)\b/,
-    /\btell me everything\b/,
-    /\bwhat is (this|the) document about\b/,
-  ];
-
-  return vaguePatterns.some((pattern) => pattern.test(normalized));
-}
 
 function buildPrompt({ history, chunks, userMessage }) {
+  const historyText = formatHistory(history);
+  const retrievedChunks = formatContext(chunks);
+
   return `SYSTEM:
-You are a document-grounded assistant in a chat-first workspace.
-Answer only with information supported by the uploaded document context and the current conversation.
-Do not complete broad or global document tasks such as summarizing the whole document, giving a general overview, explaining everything, or telling the user everything in the file.
-If the user's request is too broad, do not answer it. Instead, guide them to ask a more specific question about a topic, section, or concept.
-If the document context does not support the answer, say that clearly and ask the user to narrow the question.
-Do not use general knowledge to fill gaps.
-Use natural, concise language and never mention chunks, embeddings, retrieval, or internal system details.
-Keep continuity with the existing conversation.
+You are a helpful AI assistant. Use conversation history when relevant.
 
 CHAT HISTORY:
-${formatHistory(history)}
+${historyText}
 
 DOCUMENT CONTEXT:
-${formatContext(chunks)}
+${retrievedChunks || 'No relevant document context found.'}
 
-CURRENT USER MESSAGE:
+USER QUERY:
 ${userMessage}
+
+INSTRUCTIONS:
+* Use chat history to understand follow-up queries
+* Prefer document context when available
+* If no document context exists, still answer using general knowledge
+* Do NOT return failure just because retrieval is empty
 
 ASSISTANT RESPONSE:`;
 }
@@ -193,42 +172,7 @@ function assertNotAborted(shouldAbort) {
 async function streamAssistantReply({ userId, chatId, history, indexedDocuments, userMessage, onToken, shouldAbort }) {
   assertNotAborted(shouldAbort);
 
-  const hasReadyDocument = Array.isArray(indexedDocuments) && indexedDocuments.length > 0;
-
-  if (!hasReadyDocument) {
-    if (typeof onToken === 'function') {
-      onToken(NO_DOCUMENT_GUIDANCE);
-    }
-
-    return {
-      answer: NO_DOCUMENT_GUIDANCE,
-      retrievedChunkCount: 0,
-    };
-  }
-
-  if (isVagueDocumentQuery(userMessage)) {
-    if (typeof onToken === 'function') {
-      onToken(VAGUE_QUERY_GUIDANCE);
-    }
-
-    return {
-      answer: VAGUE_QUERY_GUIDANCE,
-      retrievedChunkCount: 0,
-    };
-  }
-
   const chunks = await retrieveRelevantChunks({ userId, chatId, query: userMessage });
-
-  if (chunks.length === 0) {
-    if (typeof onToken === 'function') {
-      onToken(NO_RELEVANT_CONTEXT_GUIDANCE);
-    }
-
-    return {
-      answer: NO_RELEVANT_CONTEXT_GUIDANCE,
-      retrievedChunkCount: 0,
-    };
-  }
 
   const prompt = buildPrompt({
     history: Array.isArray(history) ? history : [],
@@ -258,7 +202,6 @@ async function streamAssistantReply({ userId, chatId, history, indexedDocuments,
 
 module.exports = {
   buildPrompt,
-  isVagueDocumentQuery,
   retrieveRelevantChunks,
   streamAssistantReply,
 };

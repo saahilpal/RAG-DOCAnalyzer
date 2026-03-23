@@ -145,13 +145,6 @@ async function streamMessage(req, res, next) {
         limit: env.chatHistoryLimit,
       });
 
-      if (attachedDocuments.length > 0 && indexedDocuments.length === 0) {
-        throw new AppError(
-          409,
-          'DOCUMENTS_NOT_READY',
-          'Attached documents are still processing. Please wait until at least one document is ready.',
-        );
-      }
 
       const userMessage = await chatService.createUserMessage({
         userId,

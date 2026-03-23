@@ -238,11 +238,18 @@ test('rag prompt uses both history and retrieved context for follow-up questions
   assert.match(capturedPrompt, /How does that compare with our roadmap discussion/);
 });
 
-test('rag guidance is returned when no document is attached', async (t) => {
-  const streamMock = t.mock.method(geminiService, 'streamGeneration', async function* () {
-    throw new Error('should not be called');
+test('rag prompt is still used when no document is attached', async (t) => {
+  let capturedPrompt = '';
+  const streamMock = t.mock.method(geminiService, 'streamGeneration', async function* (prompt) {
+    capturedPrompt = prompt;
+    yield 'General knowledge answer';
   });
   let streamed = '';
+
+  t.mock.method(db, 'query', async () => ({
+    rowCount: 0,
+    rows: [],
+  }));
 
   const result = await ragService.streamAssistantReply({
     userId: USER_ID,
@@ -255,17 +262,25 @@ test('rag guidance is returned when no document is attached', async (t) => {
     },
   });
 
-  assert.equal(result.answer, 'Please upload a document to begin.');
+  assert.equal(result.answer, 'General knowledge answer');
   assert.equal(streamed, result.answer);
-  assert.equal(streamMock.mock.callCount(), 0);
+  assert.equal(streamMock.mock.callCount(), 1);
+  assert.match(capturedPrompt, /No relevant document context found/);
 });
 
-test('broad document requests are guided without calling the model', async (t) => {
-  const streamMock = t.mock.method(geminiService, 'streamGeneration', async function* () {
-    throw new Error('should not be called');
+test('broad document requests are passed to the model', async (t) => {
+  let capturedPrompt = '';
+  const streamMock = t.mock.method(geminiService, 'streamGeneration', async function* (prompt) {
+    capturedPrompt = prompt;
+    yield 'Summary of the document';
   });
 
   let streamed = '';
+
+  t.mock.method(db, 'query', async () => ({
+    rowCount: 0,
+    rows: [],
+  }));
 
   const result = await ragService.streamAssistantReply({
     userId: USER_ID,
@@ -278,46 +293,16 @@ test('broad document requests are guided without calling the model', async (t) =
     },
   });
 
-  assert.equal(
-    result.answer,
-    "I'm here to help with your document. Try asking about a specific topic or concept from it.",
-  );
+  assert.equal(result.answer, 'Summary of the document');
   assert.equal(streamed, result.answer);
-  assert.equal(streamMock.mock.callCount(), 0);
+  assert.equal(streamMock.mock.callCount(), 1);
 });
 
-test('vague document requests are guided without retrieval or model fallback', async (t) => {
-  const streamMock = t.mock.method(geminiService, 'streamGeneration', async function* () {
-    throw new Error('should not be called');
-  });
-  const queryMock = t.mock.method(db, 'query', async () => {
-    throw new Error('should not be called');
-  });
-  let streamed = '';
-
-  const result = await ragService.streamAssistantReply({
-    userId: USER_ID,
-    chatId: CHAT_ID,
-    history: [],
-    indexedDocuments: [{ id: DOCUMENT_ID }],
-    userMessage: 'What is this?',
-    onToken: (token) => {
-      streamed += token;
-    },
-  });
-
-  assert.equal(
-    result.answer,
-    "I'm here to help with your document. Try asking about a specific topic or concept from it.",
-  );
-  assert.equal(streamed, result.answer);
-  assert.equal(streamMock.mock.callCount(), 0);
-  assert.equal(queryMock.mock.callCount(), 0);
-});
-
-test('missing document matches return guidance without general fallback', async (t) => {
-  const streamMock = t.mock.method(geminiService, 'streamGeneration', async function* () {
-    throw new Error('should not be called');
+test('vague document requests use history and call the model', async (t) => {
+  let capturedPrompt = '';
+  const streamMock = t.mock.method(geminiService, 'streamGeneration', async function* (prompt) {
+    capturedPrompt = prompt;
+    yield 'History-aware answer';
   });
   t.mock.method(db, 'query', async () => ({
     rowCount: 0,
@@ -328,7 +313,36 @@ test('missing document matches return guidance without general fallback', async 
   const result = await ragService.streamAssistantReply({
     userId: USER_ID,
     chatId: CHAT_ID,
-    history: [],
+    history: [{ role: 'user', content: 'What is the capital of France?' }, { role: 'assistant', content: 'Paris' }],
+    indexedDocuments: [{ id: DOCUMENT_ID }],
+    userMessage: 'What is this?',
+    onToken: (token) => {
+      streamed += token;
+    },
+  });
+
+  assert.equal(result.answer, 'History-aware answer');
+  assert.equal(streamed, result.answer);
+  assert.equal(streamMock.mock.callCount(), 1);
+  assert.match(capturedPrompt, /What is the capital of France/);
+});
+
+test('missing document matches still call the model with history and query', async (t) => {
+  let capturedPrompt = '';
+  const streamMock = t.mock.method(geminiService, 'streamGeneration', async function* (prompt) {
+    capturedPrompt = prompt;
+    yield 'General fallback answer';
+  });
+  t.mock.method(db, 'query', async () => ({
+    rowCount: 0,
+    rows: [],
+  }));
+  let streamed = '';
+
+  const result = await ragService.streamAssistantReply({
+    userId: USER_ID,
+    chatId: CHAT_ID,
+    history: [{ role: 'assistant', content: 'Ask me about policy specifics.' }],
     indexedDocuments: [{ id: DOCUMENT_ID }],
     userMessage: 'What does the contract say about vacation carryover?',
     onToken: (token) => {
@@ -336,12 +350,15 @@ test('missing document matches return guidance without general fallback', async 
     },
   });
 
-  assert.equal(
-    result.answer,
-    "I couldn't find relevant information in your document. Try asking something more specific.",
-  );
+  assert.equal(result.answer, 'General fallback answer');
   assert.equal(streamed, result.answer);
-  assert.equal(streamMock.mock.callCount(), 0);
+  assert.equal(streamMock.mock.callCount(), 1);
+  assert.match(capturedPrompt, /CHAT HISTORY:/);
+  assert.match(capturedPrompt, /Ask me about policy specifics/);
+  assert.match(capturedPrompt, /DOCUMENT CONTEXT:/);
+  assert.match(capturedPrompt, /No relevant document context found/);
+  assert.match(capturedPrompt, /USER QUERY:/);
+  assert.match(capturedPrompt, /vacation carryover/);
 });
 
 test('retrieval failures are raised explicitly as RETRIEVAL_FAILED', async (t) => {
