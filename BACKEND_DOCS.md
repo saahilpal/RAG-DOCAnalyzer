@@ -1,35 +1,12 @@
-# Backend API Documentation
+# Backend API Reference
 
-This document is for frontend/mobile clients integrating with the backend.
+Base path: `/api/v1`
 
-## Base URL
+This document is generated from the current route/controller/service structure in `src/`.
 
-- Production: `https://api.docanalyzer.app`
-- API prefix: `/api/v1`
+## Response Envelope
 
-Example full endpoint:
-
-- `https://api.docanalyzer.app/api/v1/auth/google`
-
-## Auth Model
-
-Authentication is cookie-based after Firebase token exchange.
-
-Flow:
-
-1. Client signs in with Firebase (Google or GitHub)
-2. Client obtains Firebase `idToken`
-3. Client calls `POST /api/v1/auth/google` with `{ idToken }`
-4. Backend verifies token via Firebase Admin SDK
-5. Backend finds/creates user and issues JWT
-6. Backend sets `httpOnly` auth cookie
-7. Subsequent authenticated calls use cookie + `credentials: include`
-
-## Response Format
-
-All JSON endpoints follow one envelope:
-
-Success:
+Successful JSON responses:
 
 ```json
 {
@@ -38,7 +15,7 @@ Success:
 }
 ```
 
-Error:
+Failed JSON responses:
 
 ```json
 {
@@ -53,24 +30,148 @@ Error:
 
 `details` is optional.
 
-## Rate Limiting
+## Authentication
 
-Layered rate limiting is active:
+### Session model
 
-- Global request limiter for all endpoints
-- Auth limiter on social sign-in route
-- Chat limiter on chat routes
-- Upload limiter on file upload route
+- Client authenticates with Firebase in the browser.
+- Backend verifies the Firebase ID token.
+- Backend signs its own JWT and sets an `httpOnly` cookie.
+- Protected routes also accept a Bearer token through `Authorization: Bearer <token>`.
 
-When exceeded, API returns `429` with `{ ok: false, error: ... }`.
+### Cookie behavior
+
+- cookie name: `AUTH_COOKIE_NAME`
+- `httpOnly: true`
+- `sameSite: none`
+- `secure: true`
+
+## Global Controls
+
+Applied across the API:
+
+- Helmet
+- CORS allowlist
+- mutation origin guard
+- global rate limiter
+- route-specific auth/chat/upload limiters
+- request validation with Zod
+
+## System Endpoints
+
+### `GET /health`
+
+Alias of live health.
+
+Response:
+
+```json
+{
+  "ok": true,
+  "data": {
+    "status": "live",
+    "service": "document-analyzer-rag-backend",
+    "timestamp": "2026-01-01T00:00:00.000Z"
+  }
+}
+```
+
+### `GET /health/live`
+
+Same as `/health`.
+
+### `GET /health/ready`
+
+Checks database readiness and cached Gemini readiness.
+
+Possible successful response:
+
+```json
+{
+  "ok": true,
+  "data": {
+    "status": "ready",
+    "mode": "full",
+    "database": true,
+    "ai": true,
+    "timestamp": "2026-01-01T00:00:00.000Z"
+  }
+}
+```
+
+Possible degraded response:
+
+```json
+{
+  "ok": true,
+  "data": {
+    "status": "ready_degraded",
+    "mode": "chat_only",
+    "database": true,
+    "ai": false,
+    "timestamp": "2026-01-01T00:00:00.000Z"
+  }
+}
+```
+
+Possible failure response:
+
+```json
+{
+  "ok": false,
+  "error": {
+    "code": "NOT_READY_DATABASE",
+    "message": "Database readiness check failed.",
+    "details": {
+      "database": false,
+      "ai": true,
+      "timestamp": "2026-01-01T00:00:00.000Z"
+    }
+  }
+}
+```
+
+### `GET /limits`
+
+Public limits/config summary for the frontend.
+
+Returns:
+
+- product philosophy string
+- retrieval mode
+- configured Gemini model
+- worker enabled flag
+- workspace limits
+- repository and quick-start links
+
+### `GET /quota`
+
+Auth required.
+
+Response:
+
+```json
+{
+  "ok": true,
+  "data": {
+    "quota": {
+      "used": 3,
+      "remaining": 17,
+      "limit": 20
+    }
+  }
+}
+```
 
 ## Auth Endpoints
 
-## POST `/api/v1/auth/google`
+### `POST /auth/google`
 
-Exchange Firebase ID token for backend session.
+Exchanges a Firebase ID token for a backend session.
 
-Request:
+This route name is historical. It also accepts GitHub sign-ins when Firebase reports `github.com` as the provider.
+
+Request body:
 
 ```json
 {
@@ -78,7 +179,7 @@ Request:
 }
 ```
 
-Response `200`:
+Successful response:
 
 ```json
 {
@@ -88,53 +189,27 @@ Response `200`:
     "user": {
       "id": "uuid",
       "email": "user@example.com",
-      "name": "User",
-      "avatar_url": "https://...",
-      "created_at": "ISO8601"
+      "name": "User Example",
+      "avatar_url": "https://example.com/avatar.png",
+      "created_at": "2026-01-01T00:00:00.000Z"
     }
   }
 }
 ```
 
-Possible errors:
+Common errors:
 
-- `401 AUTH_INVALID_GOOGLE_TOKEN`
-- `400 AUTH_EMAIL_REQUIRED`
-- `400 VALIDATION_ERROR`
-- `429 AUTH_RATE_LIMITED`
+- `AUTH_INVALID_GOOGLE_TOKEN`
+- `AUTH_EMAIL_REQUIRED`
+- `FIREBASE_NOT_CONFIGURED`
+- `BAD_REQUEST`
+- `AUTH_RATE_LIMITED`
 
-## GET `/api/v1/auth/me`
+### `POST /auth/logout`
 
-Returns current authenticated user from cookie session.
+Clears the auth cookie.
 
-Response `200`:
-
-```json
-{
-  "ok": true,
-  "data": {
-    "user": {
-      "id": "uuid",
-      "email": "user@example.com",
-      "name": "User",
-      "avatar_url": "https://...",
-      "created_at": "ISO8601"
-    }
-  }
-}
-```
-
-Possible errors:
-
-- `401 AUTH_REQUIRED`
-- `401 AUTH_INVALID_TOKEN`
-- `401 AUTH_EXPIRED`
-
-## POST `/api/v1/auth/logout`
-
-Clears auth cookie.
-
-Response `200`:
+Response:
 
 ```json
 {
@@ -145,19 +220,57 @@ Response `200`:
 }
 ```
 
+### `GET /auth/me`
+
+Auth required.
+
+Returns the current user:
+
+```json
+{
+  "ok": true,
+  "data": {
+    "user": {
+      "id": "uuid",
+      "email": "user@example.com",
+      "name": "User Example",
+      "avatar_url": "https://example.com/avatar.png",
+      "created_at": "2026-01-01T00:00:00.000Z"
+    }
+  }
+}
+```
+
+Common errors:
+
+- `AUTH_REQUIRED`
+- `AUTH_EXPIRED`
+- `AUTH_INVALID_TOKEN`
+
 ## Chat Endpoints
 
-All chat endpoints require auth cookie (`credentials: include`).
+All `/chats` endpoints require authentication.
 
-## GET `/api/v1/chats?limit=50`
+### `GET /chats?limit=50`
 
-List chats for current user.
+Lists chats ordered by:
 
-## POST `/api/v1/chats`
+1. pinned first
+2. newest `updated_at`
 
-Create chat.
+Each row includes:
 
-Request:
+- chat id/title/pinned
+- timestamps
+- `last_message`
+- `last_message_at`
+- `attachment_count`
+
+### `POST /chats`
+
+Creates a chat.
+
+Request body:
 
 ```json
 {
@@ -165,139 +278,225 @@ Request:
 }
 ```
 
-Response `201`: `{ ok: true, data: { chat } }`
+If the title is omitted, the default is `New Chat`.
 
-## GET `/api/v1/chats/:chatId`
+### `GET /chats/:chatId`
 
-Get single chat.
+Returns a single owned chat.
 
-## PATCH `/api/v1/chats/:chatId`
+Common errors:
 
-Update title/pinned.
+- `CHAT_NOT_FOUND`
 
-Request:
+### `PATCH /chats/:chatId`
+
+Updates one or both of:
+
+- `title`
+- `pinned`
+
+Request body:
 
 ```json
 {
-  "title": "New title",
+  "title": "Renamed chat",
   "pinned": true
 }
 ```
 
-Response `200`: `{ ok: true, data: { chat } }`
+Validation requires at least one field.
 
-## DELETE `/api/v1/chats/:chatId`
+### `DELETE /chats/:chatId`
 
-Delete chat.
+Deletes the chat and all related messages/attachments through cascading foreign keys.
 
-Response `200`:
+Response:
 
 ```json
 {
   "ok": true,
   "data": {
     "deleted": {
-      "id": "uuid"
+      "id": "chat_uuid"
     }
   }
 }
 ```
 
-## GET `/api/v1/chats/:chatId/messages?limit=200`
+### `GET /chats/:chatId/messages?limit=200`
 
-List chat messages.
+Returns persisted messages in ascending chronological order.
 
-## POST `/api/v1/chats/:chatId/messages/stream`
+### `POST /chats/:chatId/messages/stream`
 
-Stream assistant response with Server-Sent Events (SSE).
+Streams a reply over Server-Sent Events.
 
-Request:
+Request body:
 
 ```json
 {
-  "content": "User prompt",
-  "clientMessageId": "client_unique_id"
+  "content": "What changed in the document?",
+  "clientMessageId": "client-generated-unique-id"
 }
 ```
 
-SSE event stream:
+Processing steps:
+
+1. verify chat ownership
+2. enforce daily quota
+3. load attached documents
+4. load recent history
+5. insert the user message
+6. retrieve relevant chunks
+7. generate answer with Gemini
+8. persist assistant message and quota
+
+SSE event types:
 
 - `chat.meta`
 - `assistant.delta`
 - `assistant.completed`
 - `error`
+- final transport terminator: `end`
 
-Important:
+Example event stream:
 
-- This endpoint returns `text/event-stream`
-- Keep connection open until completion event
-- On errors during stream, `error` SSE event is emitted
+```text
+event: chat.meta
+data: {"chatId":"...","userMessageId":"..."}
 
-## Upload / Document Endpoints
+event: assistant.delta
+data: {"text":"The pricing section changes annual minimums..."}
 
-## GET `/api/v1/chats/:chatId/documents`
+event: assistant.completed
+data: {"assistantMessage":{"id":"..."},"quota":{"used":1,"remaining":19,"limit":20}}
 
-List documents attached to chat.
+event: end
+data: {}
+```
 
-## POST `/api/v1/chats/:chatId/documents`
+Important notes:
 
-Attach and upload a PDF document to chat.
+- the endpoint responds with `text/event-stream`
+- the backend deletes the inserted user message if generation fails before assistant persistence
+- duplicate user sends are rejected by `clientMessageId` uniqueness per chat
+
+Common errors before streaming starts:
+
+- `AUTH_REQUIRED`
+- `CHAT_NOT_FOUND`
+- `CHAT_DAILY_LIMIT_REACHED`
+- `DUPLICATE_MESSAGE`
+- `RETRIEVAL_FAILED`
+- `AI_TEMPORARILY_UNAVAILABLE`
+
+## Document Endpoints
+
+### `GET /chats/:chatId/documents`
+
+Returns documents attached to the chat, ordered by attachment time.
+
+Fields include:
+
+- `id`
+- `file_name`
+- `file_url`
+- `status`
+- `page_count`
+- `chunk_count`
+- `last_error`
+- `created_at`
+- `indexed_at`
+- `attached_at`
+
+Implementation detail:
+
+- `file_url` is intentionally sanitized to an empty string in service responses
+- files are stored privately in Supabase Storage and are not exposed directly through this API
+
+### `POST /chats/:chatId/documents`
+
+Uploads and attaches one PDF file.
 
 Request:
 
-- Content-Type: `multipart/form-data`
-- Field: `file`
+- `Content-Type: multipart/form-data`
+- field name: `file`
 
-Response `201`: `{ ok: true, data: { document } }`
+Validation rules:
 
-Possible errors:
+- must be a PDF by extension and MIME type
+- must contain a valid `%PDF-` signature
+- must fit within `MAX_UPLOAD_FILE_SIZE_BYTES`
 
-- `400 VALIDATION_ERROR`
-- `400 FILE_TOO_LARGE`
-- `409 ATTACHMENT_LIMIT_REACHED`
-- `409 DUPLICATE_DOCUMENT`
-- `429 UPLOAD_RATE_LIMITED`
+Behavior:
 
-## DELETE `/api/v1/chats/:chatId/documents/:documentId`
+- deduplicates by SHA-256 per user
+- uploads new files to Supabase Storage
+- inserts `documents` row and `chat_documents` row
+- returns the document in `processing` state
 
-Remove attachment/document association (with ownership checks).
+Common errors:
 
-Response `200`: `{ ok: true, data: { deleted: { id } } }`
-
-## Utility Endpoints
-
-## GET `/api/v1/quota`
-
-Returns current daily usage.
-
-## GET `/api/v1/limits`
-
-Returns configured product limits and model metadata.
-
-## GET `/api/v1/health/live`
-
-Liveness check.
-
-## GET `/api/v1/health/ready`
-
-Readiness check (full or degraded mode).
-
-## Common Error Codes
-
-- `AUTH_REQUIRED`
-- `AUTH_INVALID_TOKEN`
-- `AUTH_EXPIRED`
-- `AUTH_INVALID_GOOGLE_TOKEN`
-- `VALIDATION_ERROR`
-- `RATE_LIMITED`
-- `AUTH_RATE_LIMITED`
-- `CHAT_RATE_LIMITED`
+- `BAD_REQUEST`
+- `FILE_TOO_LARGE`
+- `ATTACHMENT_LIMIT_REACHED`
 - `UPLOAD_RATE_LIMITED`
-- `INTERNAL_ERROR`
+- `STORAGE_UPLOAD_FAILED`
 
-## Client Integration Notes
+### `DELETE /chats/:chatId/documents/:documentId`
 
-- Always send requests with credentials:
-  - `fetch(..., { credentials: "include" })`
-- Do not store backend JWT manually if cookie flow is used
-- Handle both HTTP error responses and SSE `error` events
+Detaches a document from the chat.
+
+If no other chats still reference that document:
+
+- the document row is deleted
+- the Supabase Storage object is removed
+
+Common errors:
+
+- `CHAT_NOT_FOUND`
+- `DOCUMENT_NOT_FOUND`
+- `DOCUMENT_NOT_ATTACHED`
+- `STORAGE_DELETE_FAILED`
+
+## Retrieval Behavior
+
+Retrieval is chat-scoped. Only documents attached to the target chat are searched.
+
+### Full-text mode
+
+- query operator: `websearch_to_tsquery('english', query)`
+- ranking: `ts_rank_cd`
+
+### Vector mode
+
+- query embedding generated with Gemini
+- rows ordered by vector distance
+- falls back to FTS if embeddings are unavailable
+
+## Worker Behavior
+
+The worker is not exposed as an API route, but it is part of backend behavior.
+
+### Claiming
+
+- scans `documents.status = 'processing'`
+- respects retry timing via `processing_started_at`
+- uses `FOR UPDATE SKIP LOCKED`
+
+### Processing
+
+- downloads PDF from Supabase
+- parses text with `pdf-parse`
+- enforces page limit
+- chunks text
+- optionally embeds chunks
+- inserts rows into `chunks`
+- marks document as `indexed`
+
+### Failure and retries
+
+- retryable failures are rescheduled
+- permanent failures set `status = 'failed'`
+- final reason is stored in `documents.last_error`
