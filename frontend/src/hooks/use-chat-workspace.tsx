@@ -327,7 +327,8 @@ export function ChatWorkspaceProvider({ children }: { children: React.ReactNode 
         setServerMessages(messageData.messages);
         setAttachments((current) => {
           const tempFailures = current.filter((document) => document.isTemp && document.status === 'failed');
-          return [...documentData.documents, ...tempFailures];
+          const tempUploading = current.filter((document) => document.isTemp && document.status === 'uploading');
+          return [...documentData.documents, ...tempFailures, ...tempUploading];
         });
       } catch (error) {
         if (isAbortError(error)) {
@@ -763,6 +764,7 @@ export function ChatWorkspaceProvider({ children }: { children: React.ReactNode 
           let shouldRefreshChats = false;
           setAttachments((current) => {
             const tempFailures = current.filter((document) => document.isTemp && document.status === 'failed');
+            const tempUploading = current.filter((document) => document.isTemp && document.status === 'uploading');
             const currentDocuments = current.filter((document) => !document.isTemp);
 
             shouldRefreshChats =
@@ -782,7 +784,7 @@ export function ChatWorkspaceProvider({ children }: { children: React.ReactNode 
                 );
               });
 
-            return shouldRefreshChats ? [...data.documents, ...tempFailures] : current;
+            return shouldRefreshChats ? [...data.documents, ...tempFailures, ...tempUploading] : current;
           });
 
           if (shouldRefreshChats) {
