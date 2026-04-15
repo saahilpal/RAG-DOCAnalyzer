@@ -388,12 +388,12 @@ export function ChatWorkspaceProvider({ children }: { children: React.ReactNode 
   }, []);
 
   const ensureActiveChat = useCallback(async () => {
-    if (activeChatIdRef.current) {
-      return activeChatIdRef.current;
+    if (activeChatId) {
+      return activeChatId;
     }
 
     return createNewChat();
-  }, [createNewChat]);
+  }, [createNewChat, activeChatId]);
 
   const clearComposerError = useCallback(() => {
     setComposerError('');
