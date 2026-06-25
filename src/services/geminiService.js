@@ -16,6 +16,21 @@ function withTimeout(promise, timeoutMs, timeoutCode = 'AI_TIMEOUT') {
   ]);
 }
 
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms).unref());
+}
+
+function isTransientGeminiError(error) {
+  if (error instanceof AppError) {
+    return error.code === 'AI_TIMEOUT' || error.code === 'AI_TEMPORARILY_UNAVAILABLE';
+  }
+
+  const status = Number(error?.status) || 0;
+  const message = String(error?.message || '').toLowerCase();
+
+  return status === 429 || status === 500 || status === 502 || status === 503 || status === 504 || message.includes('overloaded') || message.includes('high demand') || message.includes('temporarily unavailable') || message.includes('timeout');
+}
+
 function mapGeminiError(error) {
   if (error instanceof AppError) {
     return error;
@@ -102,41 +117,65 @@ async function embedTexts(texts, options = {}) {
 
 async function* streamGeneration(prompt, options = {}) {
   const { shouldAbort } = options;
+  const maxAttempts = env.aiMaxRetries + 1;
 
-  try {
-    logger.info('Gemini generation request started', {
-      model: env.geminiModel,
-    });
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      logger.info('Gemini generation request started', {
+        model: env.geminiModel,
+        attempt,
+        maxAttempts,
+      });
 
-    const result = await withTimeout(
-      generationModel.generateContent({
-        contents: [
-          {
-            role: 'user',
-            parts: [{ text: prompt }],
-          },
-        ],
-      }),
-      env.aiTimeoutMs,
-    );
+      const result = await withTimeout(
+        generationModel.generateContent({
+          contents: [
+            {
+              role: 'user',
+              parts: [{ text: prompt }],
+            },
+          ],
+        }),
+        env.aiTimeoutMs,
+      );
 
-    if (typeof shouldAbort === 'function' && shouldAbort()) {
-      throw new AppError(499, 'CLIENT_DISCONNECTED', 'Client disconnected before response completed.');
+      if (typeof shouldAbort === 'function' && shouldAbort()) {
+        throw new AppError(499, 'CLIENT_DISCONNECTED', 'Client disconnected before response completed.');
+      }
+
+      const text = result?.response?.text?.() || '';
+      if (text) {
+        yield text;
+      }
+      return;
+    } catch (error) {
+      const isTransient = isTransientGeminiError(error);
+      const shouldRetry = isTransient && attempt < maxAttempts;
+
+      if (shouldRetry) {
+        logger.warn('Gemini generation request retrying', {
+          model: env.geminiModel,
+          attempt,
+          maxAttempts,
+          upstreamStatus: error?.status || null,
+          upstreamStatusText: error?.statusText || null,
+          upstreamMessage: error?.message || null,
+        });
+        await delay(env.aiRetryDelayMs);
+        continue;
+      }
+
+      logger.error('Gemini generation request failed', {
+        model: env.geminiModel,
+        attempt,
+        maxAttempts,
+        upstreamStatus: error?.status || null,
+        upstreamStatusText: error?.statusText || null,
+        upstreamMessage: error?.message || null,
+        error: serializeGeminiError(error),
+      });
+      throw mapGeminiError(error);
     }
-
-    const text = result?.response?.text?.() || '';
-    if (text) {
-      yield text;
-    }
-  } catch (error) {
-    logger.error('Gemini generation request failed', {
-      model: env.geminiModel,
-      upstreamStatus: error?.status || null,
-      upstreamStatusText: error?.statusText || null,
-      upstreamMessage: error?.message || null,
-      error: serializeGeminiError(error),
-    });
-    throw mapGeminiError(error);
   }
 }
 

@@ -79,7 +79,7 @@ CREATE TABLE chunks (
   document_id UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
   chunk_index INTEGER NOT NULL,
   content TEXT NOT NULL,
-  embedding vector(384),
+  embedding vector(768),
   search_vector tsvector GENERATED ALWAYS AS (to_tsvector('english', COALESCE(content, ''))) STORED,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

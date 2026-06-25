@@ -50,13 +50,7 @@ function formatContext(chunks) {
     .join('\n\n');
 }
 
-function normalizeUserMessage(userMessage) {
-  return String(userMessage || '')
-    .toLowerCase()
-    .replace(/[^\w\s]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
+
 
 
 function buildPrompt({ history, chunks, userMessage }) {
@@ -64,7 +58,7 @@ function buildPrompt({ history, chunks, userMessage }) {
   const retrievedChunks = formatContext(chunks);
 
   return `SYSTEM:
-You are a helpful AI assistant. Use conversation history when relevant.
+You are a helpful AI assistant that answers questions based on uploaded documents.
 
 CHAT HISTORY:
 ${historyText}
@@ -77,9 +71,10 @@ ${userMessage}
 
 INSTRUCTIONS:
 * Use chat history to understand follow-up queries
-* Prefer document context when available
-* If no document context exists, still answer using general knowledge
-* Do NOT return failure just because retrieval is empty
+* You MUST base your answer on the DOCUMENT CONTEXT provided above
+* If the document context contains relevant information, use it to answer the query
+* If the document context does not contain relevant information, say: "I couldn't find relevant information in your uploaded document for this question. Try rephrasing with specific terms from the document."
+* Do NOT use your general knowledge to answer questions about the document
 
 ASSISTANT RESPONSE:`;
 }
@@ -99,7 +94,6 @@ async function retrieveFtsChunks({ userId, chatId, query }) {
        WHERE ch.user_id = $1
          AND ch.id = $2
          AND d.status = 'indexed'
-         AND c.search_vector @@ websearch_to_tsquery('english', $3)
        ORDER BY score DESC, c.chunk_index ASC
        LIMIT $4`,
       [userId, chatId, query, env.ragCandidatePageSize],
@@ -172,7 +166,10 @@ function assertNotAborted(shouldAbort) {
 async function streamAssistantReply({ userId, chatId, history, indexedDocuments, userMessage, onToken, shouldAbort }) {
   assertNotAborted(shouldAbort);
 
-  const chunks = await retrieveRelevantChunks({ userId, chatId, query: userMessage });
+  const hasIndexedDocuments = Array.isArray(indexedDocuments) && indexedDocuments.length > 0;
+  const chunks = hasIndexedDocuments
+    ? await retrieveRelevantChunks({ userId, chatId, query: userMessage })
+    : [];
 
   const prompt = buildPrompt({
     history: Array.isArray(history) ? history : [],

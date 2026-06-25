@@ -16,8 +16,10 @@ const envSchema = z.object({
   GEMINI_API_KEY: z.string().min(1),
   GEMINI_MODEL: z.string().default('gemini-2.5-flash'),
   GEMINI_EMBEDDING_MODEL: z.string().default('gemini-embedding-001'),
-  EMBEDDING_DIMENSION: z.coerce.number().int().positive().default(384),
+  EMBEDDING_DIMENSION: z.coerce.number().int().positive().default(768),
   AI_TIMEOUT_MS: z.coerce.number().int().positive().default(12_000),
+  AI_MAX_RETRIES: z.coerce.number().int().nonnegative().default(2),
+  AI_RETRY_DELAY_MS: z.coerce.number().int().nonnegative().default(750),
 
   RETRIEVAL_MODE: z.enum(['fts', 'vector']).default('fts'),
 
@@ -103,6 +105,8 @@ module.exports = {
   geminiEmbeddingModel: env.GEMINI_EMBEDDING_MODEL,
   embeddingDimension: env.EMBEDDING_DIMENSION,
   aiTimeoutMs: env.AI_TIMEOUT_MS,
+  aiMaxRetries: env.AI_MAX_RETRIES,
+  aiRetryDelayMs: env.AI_RETRY_DELAY_MS,
 
   retrievalMode: env.RETRIEVAL_MODE,
 

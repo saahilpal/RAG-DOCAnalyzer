@@ -25,6 +25,7 @@ const db = require('../src/database/client');
 const env = require('../src/config/env');
 const storageService = require('../src/services/storageService');
 const geminiService = require('../src/services/geminiService');
+const geminiConfig = require('../src/config/gemini');
 
 const USER_ID = '11111111-1111-4111-8111-111111111111';
 const CHAT_ID = '22222222-2222-4222-8222-222222222222';
@@ -184,6 +185,34 @@ test('stream endpoint surfaces explicit retrieval errors and skips assistant per
   assert.match(response.body, /RETRIEVAL_FAILED/);
   assert.equal(saveMock.mock.callCount(), 0);
   assert.equal(cleanupMock.mock.callCount(), 1);
+});
+
+test('streamGeneration retries transient Gemini errors before succeeding', async (t) => {
+  let attempts = 0;
+
+  t.mock.method(geminiConfig.generationModel, 'generateContent', async () => {
+    attempts += 1;
+
+    if (attempts < 3) {
+      const error = new Error('Service Unavailable');
+      error.status = 503;
+      throw error;
+    }
+
+    return {
+      response: {
+        text: () => 'Recovered answer',
+      },
+    };
+  });
+
+  const chunks = [];
+  for await (const token of geminiService.streamGeneration('hello there')) {
+    chunks.push(token);
+  }
+
+  assert.deepEqual(chunks, ['Recovered answer']);
+  assert.equal(attempts, 3);
 });
 
 test('upload endpoint returns ATTACHMENT_LIMIT_REACHED when a fourth file is attached', async (t) => {
