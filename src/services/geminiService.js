@@ -17,7 +17,7 @@ function withTimeout(promise, timeoutMs, timeoutCode = 'AI_TIMEOUT') {
 }
 
 function delay(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms).unref());
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function isTransientGeminiError(error) {
@@ -127,8 +127,8 @@ async function* streamGeneration(prompt, options = {}) {
         maxAttempts,
       });
 
-      const result = await withTimeout(
-        generationModel.generateContent({
+      const resultStream = await withTimeout(
+        generationModel.generateContentStream({
           contents: [
             {
               role: 'user',
@@ -139,13 +139,15 @@ async function* streamGeneration(prompt, options = {}) {
         env.aiTimeoutMs,
       );
 
-      if (typeof shouldAbort === 'function' && shouldAbort()) {
-        throw new AppError(499, 'CLIENT_DISCONNECTED', 'Client disconnected before response completed.');
-      }
+      for await (const chunk of resultStream.stream) {
+        if (typeof shouldAbort === 'function' && shouldAbort()) {
+          throw new AppError(499, 'CLIENT_DISCONNECTED', 'Client disconnected before response completed.');
+        }
 
-      const text = result?.response?.text?.() || '';
-      if (text) {
-        yield text;
+        const text = chunk.text();
+        if (text) {
+          yield text;
+        }
       }
       return;
     } catch (error) {

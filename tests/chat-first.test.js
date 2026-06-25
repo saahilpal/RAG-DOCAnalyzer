@@ -190,7 +190,7 @@ test('stream endpoint surfaces explicit retrieval errors and skips assistant per
 test('streamGeneration retries transient Gemini errors before succeeding', async (t) => {
   let attempts = 0;
 
-  t.mock.method(geminiConfig.generationModel, 'generateContent', async () => {
+  t.mock.method(geminiConfig.generationModel, 'generateContentStream', async () => {
     attempts += 1;
 
     if (attempts < 3) {
@@ -200,9 +200,9 @@ test('streamGeneration retries transient Gemini errors before succeeding', async
     }
 
     return {
-      response: {
-        text: () => 'Recovered answer',
-      },
+      stream: (async function* () {
+        yield { text: () => 'Recovered answer' };
+      })(),
     };
   });
 
